@@ -234,14 +234,15 @@ export class UpgradeUIScene extends Phaser.Scene {
     }
 
     private selectUpgrade(choice: UpgradeChoice): void {
-        this.progressionSystem.applyUpgrade(choice.id);
-        this.progressionSystem.resumeGameAfterUpgrade(); // This method might need renaming or repurposing now
+        if (choice) {
+            this.progressionSystem.applyUpgrade(choice.id);
+            this.progressionSystem.resumeGameAfterUpgrade(); // This method might need renaming or repurposing now
 
-        // No longer resuming the main game scene as it's not paused by this UI
-        // if (this.scene.isPaused(MAIN_GAME_SCENE_KEY)) {
-        //     this.scene.resume(MAIN_GAME_SCENE_KEY);
-        // }
+            // No longer resuming the main game scene as it's not paused by this UI
+            // if (this.scene.isPaused(MAIN_GAME_SCENE_KEY)) {
+            //     this.scene.resume(MAIN_GAME_SCENE_KEY);
+            // }
 
-        this.scene.stop(); // Stop this UI scene
-    }
-} 
+            this.scene.stop(); // Stop this UI scene
+        }
+    } 

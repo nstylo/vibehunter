@@ -245,4 +245,5 @@ export class UpgradeUIScene extends Phaser.Scene {
 
             this.scene.stop(); // Stop this UI scene
         }
-    } 
+    }
+}

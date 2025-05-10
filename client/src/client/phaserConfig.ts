@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 
 const phaserConfig: Phaser.Types.Core.GameConfig = {
-    type: Phaser.WEBGL, // Automatically choose WebGL or Canvas
+    type: Phaser.WEBGL,
     width: 1280,
-    height: 960,
-    parent: 'game-container', // ID of the DOM element to parent the game
+    height: 720,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    parent: 'game-container',
     physics: {
         default: 'arcade',
         arcade: {

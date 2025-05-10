@@ -15,7 +15,6 @@ export class EnemySprite extends EntitySprite {
     private particleSystem?: ParticleSystem;
     private shootingTimer: Phaser.Time.TimerEvent | null = null;
 
-    // Store definition properties
     private meleeAttackDamage: number;
     private meleeAttackRange: number;
     private rangedAttackRange: number | null;

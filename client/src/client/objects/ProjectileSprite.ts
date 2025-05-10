@@ -68,7 +68,7 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     this.speed = speed;
     this.lifeMs = lifeMs;
     this.particleSystem = particleSystem;
-    this.projectileTypeEnum = projectileType; // Store the passed enum type
+    this.projectileTypeEnum = projectileType;
 
     scene.add.existing(this);
     scene.physics.add.existing(this);

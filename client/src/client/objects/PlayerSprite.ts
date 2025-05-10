@@ -25,11 +25,10 @@ const MINIMUM_SHOOT_COOLDOWN_MS = 50; // Minimum time in ms between shots
 const POSITION_UPDATE_THRESHOLD = 0.5;
 
 export class PlayerSprite extends EntitySprite implements NetworkAware {
-    public playerId: string; // Kept, as it's specific semantic for player
+    public playerId: string;
     public dashCooldown: number;
-    // maxSpeed is inherited from EntitySprite
-    public accelerationFactor: number; // Interpolation factor for accelerating
-    public decelerationFactor: number; // Interpolation factor for decelerating
+    public accelerationFactor: number;
+    public decelerationFactor: number;
     private isDashing = false;
     private dashEndTime = 0;
     private lastDashTime = 0;
@@ -45,10 +44,10 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
     // Network-related properties
     private networkSystem: NetworkSystem | null = null;
-    private isNetworkControlled: boolean = false;
-    private lastSentPosition: { x: number, y: number } = { x: 0, y: 0 };
-    private positionUpdateDelay: number = 100; // ms between position updates
-    private lastPositionUpdateTime: number = 0;
+    private isNetworkControlled = false;
+    private lastSentPosition = { x: 0, y: 0 };
+    private positionUpdateDelay = 100;
+    private lastPositionUpdateTime = 0;
 
     constructor(scene: Phaser.Scene, x: number, y: number, playerId: string) {
         // Generate texture if it doesn't exist

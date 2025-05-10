@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { EntitySprite } from './EntitySprite'
-import type { EnemySprite } from './EnemySprite'; 
+import type { EnemySprite } from './EnemySprite';
 import { type IPlayerStats, DEFAULT_PLAYER_STATS } from '../../common/PlayerStats';
 import type NetworkSystem from '../systems/NetworkSystem'
 import type { NetworkAware } from '../types/multiplayer';
@@ -10,8 +10,8 @@ const PLAYER_WIDTH = 48;
 const PLAYER_HEIGHT = 72;
 
 // Define dedicated physics size, smaller than visual texture
-const PLAYER_PHYSICS_WIDTH = 32; 
-const PLAYER_PHYSICS_HEIGHT = 48; 
+const PLAYER_PHYSICS_WIDTH = 32;
+const PLAYER_PHYSICS_HEIGHT = 48;
 
 const PLAYER_DASH_SPEED_MULTIPLIER = 2.5;
 const PLAYER_DASH_DURATION = 150; // ms
@@ -32,7 +32,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private isDashing = false;
     private dashEndTime = 0;
     private lastDashTime = 0;
-    
+
     // Auto-shooting properties
     private targetEnemy: EnemySprite | null = null;
     private shootingTimer: Phaser.Time.TimerEvent | null = null;
@@ -49,6 +49,12 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private positionUpdateDelay = 100;
     private lastPositionUpdateTime = 0;
 
+    // Properties for WASD input
+    private keyW: Phaser.Input.Keyboard.Key | undefined;
+    private keyA: Phaser.Input.Keyboard.Key | undefined;
+    private keyS: Phaser.Input.Keyboard.Key | undefined;
+    private keyD: Phaser.Input.Keyboard.Key | undefined;
+
     constructor(scene: Phaser.Scene, x: number, y: number, playerId: string) {
         // Generate texture if it doesn't exist
         if (!scene.textures.exists(PLAYER_WIZARD_TEXTURE_KEY)) {
@@ -56,10 +62,10 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         }
 
         // Initialize with default stats that will be soon updated by ProgressionSystem
-        super(scene, x, y, PLAYER_WIZARD_TEXTURE_KEY, playerId, 
-              DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
-              DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
-              DEFAULT_PLAYER_STATS.movementSpeed); // Use from DEFAULT_PLAYER_STATS
+        super(scene, x, y, PLAYER_WIZARD_TEXTURE_KEY, playerId,
+            DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
+            DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
+            DEFAULT_PLAYER_STATS.movementSpeed); // Use from DEFAULT_PLAYER_STATS
         this.playerId = playerId; // entityId from EntitySprite is already set to playerId by super call
         this.dashCooldown = 0; // Default dash cooldown
         this.accelerationFactor = 0.1; // Default acceleration factor
@@ -78,7 +84,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         }
 
         // Initialize with values from DEFAULT_PLAYER_STATS directly
-        this.projectileType = 'BULLET'; 
+        this.projectileType = 'BULLET';
         this.projectileDamage = DEFAULT_PLAYER_STATS.projectileDamage;
         this.projectileSpeed = DEFAULT_PLAYER_STATS.projectileSpeed;
         this.shootCooldown = DEFAULT_PLAYER_STATS.attackSpeed;
@@ -89,6 +95,16 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         // Set up auto-shooting timer - completely separate from movement
         this.initAutoShooting();
 
+        // Initialize WASD keys
+        if (scene.input.keyboard) {
+            this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+            this.keyA = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+            this.keyS = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+            this.keyD = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+        } else {
+            console.warn('PlayerSprite: Keyboard input system not available in the scene. WASD keys will not work.');
+        }
+
         // Listen for stat updates from ProgressionSystem
         this.scene.events.on('playerStatsUpdated', this.updateStats, this);
     }
@@ -98,14 +114,14 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         this.projectileSpeed = newStats.projectileSpeed;
         this.projectileDamage = newStats.projectileDamage;
         this.currentProjectileScale = newStats.projectileSize;
-        
+
         this.currentDefense = newStats.defense; // Update local cache
         this.defense = newStats.defense; // Update EntitySprite's defense property
-        
+
         if (this.maxHp !== newStats.maxHealth) {
             const oldHpPercentage = this.hp / this.maxHp;
             this.maxHp = newStats.maxHealth;
-            this.hp = Math.min(this.hp, this.maxHp); 
+            this.hp = Math.min(this.hp, this.maxHp);
         }
         // If only current HP can be upgraded (e.g. heal upgrade, not maxHP up), that'd be separate logic.
 
@@ -184,7 +200,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         if (this.targetEnemy?.active) {
             const targetPosition = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
             this.attemptShoot(targetPosition);
-            
+
             // Flip player based on target direction
             if (this.targetEnemy.x < this.x) {
                 this.setFlipX(true);
@@ -202,7 +218,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     public setNetworkMode(networkSystem: NetworkSystem | null, isNetworkControlled: boolean = false): void {
         this.networkSystem = networkSystem;
         this.isNetworkControlled = isNetworkControlled;
-        
+
         // Reset last sent position
         if (networkSystem && !isNetworkControlled) {
             this.lastSentPosition = { x: this.x, y: this.y };
@@ -218,8 +234,8 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     public updateMovement(cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined): void {
         // Don't process movement for network-controlled players
         if (this.isNetworkControlled) return;
-        
-        if (!this.body || !cursors) {
+
+        if (!this.body) {
             return;
         }
 
@@ -227,15 +243,21 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         let inputTargetVelocityX = 0;
         let inputTargetVelocityY = 0;
 
-        if (cursors.left.isDown) {
+        // Check for pressed keys (Arrow keys OR WASD)
+        const leftPressed = (cursors?.left.isDown || this.keyA?.isDown) ?? false;
+        const rightPressed = (cursors?.right.isDown || this.keyD?.isDown) ?? false;
+        const upPressed = (cursors?.up.isDown || this.keyW?.isDown) ?? false;
+        const downPressed = (cursors?.down.isDown || this.keyS?.isDown) ?? false;
+
+        if (leftPressed) {
             inputTargetVelocityX = -this.maxSpeed;
-        } else if (cursors.right.isDown) {
+        } else if (rightPressed) {
             inputTargetVelocityX = this.maxSpeed;
         }
 
-        if (cursors.up.isDown) {
+        if (upPressed) {
             inputTargetVelocityY = -this.maxSpeed;
-        } else if (cursors.down.isDown) {
+        } else if (downPressed) {
             inputTargetVelocityY = this.maxSpeed;
         }
 
@@ -248,75 +270,77 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
         // Smoothly interpolate current velocity towards target velocity
         // Use accelerationFactor if there's input, otherwise use decelerationFactor
-        const xFactor = (inputTargetVelocityX !== 0 || (cursors.left.isDown || cursors.right.isDown)) ? this.accelerationFactor : this.decelerationFactor;
+        const horizontalInputActive = leftPressed || rightPressed;
+        const xFactor = (inputTargetVelocityX !== 0 || horizontalInputActive) ? this.accelerationFactor : this.decelerationFactor;
         body.velocity.x = Phaser.Math.Linear(body.velocity.x, inputTargetVelocityX, xFactor);
 
-        const yFactor = (inputTargetVelocityY !== 0 || (cursors.up.isDown || cursors.down.isDown)) ? this.accelerationFactor : this.decelerationFactor;
+        const verticalInputActive = upPressed || downPressed;
+        const yFactor = (inputTargetVelocityY !== 0 || verticalInputActive) ? this.accelerationFactor : this.decelerationFactor;
         body.velocity.y = Phaser.Math.Linear(body.velocity.y, inputTargetVelocityY, yFactor);
 
         // If very close to zero, set velocity to zero to prevent endless drifting
         const stopThreshold = 1;
-        if (Math.abs(body.velocity.x) < stopThreshold && inputTargetVelocityX === 0 && !cursors.left.isDown && !cursors.right.isDown) {
+        if (Math.abs(body.velocity.x) < stopThreshold && inputTargetVelocityX === 0 && !horizontalInputActive) {
             body.velocity.x = 0;
         }
-        if (Math.abs(body.velocity.y) < stopThreshold && inputTargetVelocityY === 0 && !cursors.up.isDown && !cursors.down.isDown) {
+        if (Math.abs(body.velocity.y) < stopThreshold && inputTargetVelocityY === 0 && !verticalInputActive) {
             body.velocity.y = 0;
         }
-        
+
         // Send position update if connected to network and position has changed significantly
         this.checkAndSendPositionUpdate();
     }
-    
+
     /**
      * Updates the player's position from network data (for remote players)
      */
     public updateFromNetwork(x: number, y: number): void {
         if (!this.isNetworkControlled) return;
-        
+
         // For remote players, directly set position
         this.x = x;
         this.y = y;
-        
+
         // If using physics, update body position too
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
             this.body.x = x;
             this.body.y = y;
         }
     }
-    
+
     /**
      * Checks if position has changed enough to send an update
      */
     private checkAndSendPositionUpdate(): void {
         if (!this.networkSystem || this.isNetworkControlled) return;
-        
+
         const currentTime = this.scene.time.now;
         if (currentTime - this.lastPositionUpdateTime < this.positionUpdateDelay) return;
-        
+
         const dx = Math.abs(this.x - this.lastSentPosition.x);
         const dy = Math.abs(this.y - this.lastSentPosition.y);
-        
+
         if (dx > POSITION_UPDATE_THRESHOLD || dy > POSITION_UPDATE_THRESHOLD) {
             this.sendPositionUpdate();
             this.lastPositionUpdateTime = currentTime;
         }
     }
-    
+
     /**
      * Sends current position to the server
      */
     private sendPositionUpdate(force: boolean = false): void {
         if (!this.networkSystem || this.isNetworkControlled) return;
-        
+
         // Only send if position has changed or force is true
-        if (force || 
-            this.x !== this.lastSentPosition.x || 
+        if (force ||
+            this.x !== this.lastSentPosition.x ||
             this.y !== this.lastSentPosition.y) {
-            
+
             // Round positions to reduce network traffic
             const roundedX = Math.round(this.x * 100) / 100;
             const roundedY = Math.round(this.y * 100) / 100;
-            
+
             this.networkSystem.sendPositionUpdate(roundedX, roundedY);
             this.lastSentPosition.x = this.x;
             this.lastSentPosition.y = this.y;
@@ -513,6 +537,6 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     }
 
     // update(time: number, delta: number): void {
-        // Movement and other updates will be handled by PredictionSystem or game scene
+    // Movement and other updates will be handled by PredictionSystem or game scene
     // }
 } 

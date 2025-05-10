@@ -1,5 +1,5 @@
 use crate::gamestate::{GameState, Position};
-use crate::input::{ClientMessage, ClientMessageType};
+use crate::messages::{ClientMessage, ClientMessageType};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
@@ -36,6 +36,10 @@ impl GameEngine {
         &self.player_id_map
     }
 
+    pub fn get_player_count(&self) -> usize {
+        self.player_id_map.len()
+    }
+
     pub fn process_tick(&mut self, game_state: &mut GameState, inputs: Vec<ClientMessage>) {
         for input in inputs {
             let player_id = match self.get_player_id(&input.address) {
@@ -49,6 +53,7 @@ impl GameEngine {
 
             match input.message_type {
                 ClientMessageType::SendPosition { x, y } => {
+                    println!("Moving player {} to position: {}, {}", player_id, x, y);
                     game_state.move_player(&player_id, Position { x, y });
                 }
                 ClientMessageType::Connect { player_name } => {

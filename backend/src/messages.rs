@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-#[derive(Debug)]
+use crate::gamestate::GameState;
+
+#[derive(Debug, Clone)]
 pub struct ClientMessage {
     pub message_type: ClientMessageType,
     pub address: SocketAddr,
@@ -13,6 +15,18 @@ pub enum ClientMessageType {
     Connect { player_name: String },
     Disconnect,
     SendPosition { x: f32, y: f32 },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ServerMessage {
+    pub message_type: ServerMessageType,
+    pub tick: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum ServerMessageType {
+    SendState { game_state: GameState },
 }
 
 mod tests {

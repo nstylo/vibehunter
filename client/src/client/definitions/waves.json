@@ -1,0 +1,27 @@
+[
+    {
+        "waveNumber": 1,
+        "waveStartMessage": "Wave 1: Slime Time!",
+        "enemyGroups": [
+            { "enemyType": "slime", "count": 10, "spawnInterval": 1000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 2,
+        "waveStartMessage": "Wave 2: Goblins Approach!",
+        "enemyGroups": [
+            { "enemyType": "slime", "count": 10, "spawnInterval": 1500, "spawnDelay": 0 },
+            { "enemyType": "goblin", "count": 5, "spawnInterval": 500, "spawnDelay": 1000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 3,
+        "waveStartMessage": "Wave 3: The Horde!",
+        "enemyGroups": [
+            { "enemyType": "slime", "count": 20, "spawnInterval": 800 },
+            { "enemyType": "goblin", "count": 10, "spawnInterval": 1200, "spawnDelay": 2000 }
+        ]
+    }
+] 

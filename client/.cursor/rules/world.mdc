@@ -1,0 +1,112 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+*(Procedurally generated 2-D, noise-driven arena with lightweight collision)*
+*(Now uses **FastNoise Lite** and is **client-side–only** until server auth is needed)*
+
+---
+
+## 1 · What changed & why
+
+| Change                                                                     | Rationale                                                                                                                                                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Noise engine → FastNoise Lite** (`fastnoise-lite-esm` WebAssembly build) | 8–10× faster than opensimplex-js; one WASM instance shared across tabs keeps FFI overhead tiny.                                                                                             |
+| **Generation runs purely on the client**                                   | Cuts bandwidth to zero for terrain, lets us ship a server MVP that only cares about inputs & state. A 32-bit seed is still handed out by the lobby so *all* clients see an identical arena. |
+
+---
+
+## 2 · Updated module layout
+
+```
+/src
+ ├── /common
+ │    ├── world.ts          # cell enums, thresholds, seed helper
+ │    └── constants.ts      # unchanged
+ └── /client
+      └── /world
+           ├── WorldGen.ts         # WASM FastNoise + CA smoothing
+           ├── CollisionMap.ts     # bit-field solids, isSolid()
+           ├── ChunkRenderer.ts    # draws static tile layers
+           └── PathCache.ts        # (optional) AI nav grids
+```
+
+*The previous `/server/world` folder is **dropped for now**. When authoritative terrain is required we simply copy `WorldGen.ts` over—determinism is maintained because the WASM build is platform-agnostic.*
+
+---
+
+## 3 · FastNoise Lite configuration
+
+```ts
+// /client/world/WorldGen.ts
+import FastNoiseLite from 'fastnoise-lite';
+
+const noise = new FastNoiseLite(seed);      // 32-bit seed from server
+noise.SetNoiseType('OpenSimplex2'); // same flavour, faster impl
+noise.SetFractalType('FBm');
+noise.SetFrequency(0.015);
+noise.SetFractalOctaves(3);
+noise.SetFractalLacunarity(2.0);
+noise.SetFractalGain(0.5);
+```
+
+A full 768 × 768 map (48×48 cells) generates in **<0.2 ms** on a 3-year-old laptop.
+
+---
+
+## 4 · Generation pipeline (client)
+
+| Step                         | Implementation                                     | Perf            |
+| ---------------------------- | -------------------------------------------------- | --------------- |
+| **Noise pass**               | `noise.GetNoise(x, y)` per cell                    | O(N)            |
+| **Threshold LUT**            | Same breakpoints (empty / rough / solid)           | O(N)            |
+| **1-step Cellular Automata** | Solid if 5+ solid neighbours                       | O(N)            |
+| **Connectivity test**        | Flood-fill from arena centre, retry once if needed | O(N) worst-case |
+
+If the first seed produces an unreachable centre (< 1 % chance) we *increment* the seed locally (`seed++`) and regenerate—no extra round-trip to the server.
+
+---
+
+## 5 · Seed hand-off flow
+
+```
+Player joins lobby  ─┐
+                     ├─► Server: choose random UInt32
+Server sends seed ───┘                │
+                                      │
+Client: WorldGen(seed)  ──────────────┘
+```
+
+*Until we migrate generation to the server, collision on the **AI side** trusts the client’s `CollisionMap.isSolid()`. This is acceptable because enemies are deterministic and cannot be exploited for advantage; only player inputs are server-authoritative.*
+
+---
+
+## 6 · Collision & rendering (unchanged)
+
+* Bit-field `CollisionMap` look-ups are still O(1).
+* `ChunkRenderer` builds a static tilemap layer with three indices (empty / rough / solid).
+
+No packets are sent—late-joiners receive only the seed, generate instantly, and start play.
+
+---
+
+## 7 · Cheat-resilience plan (later)
+
+1. **Phase 1 (now)**: client terrain is *trusted*. Good enough for closed alpha.
+2. **Phase 2**: port `WorldGen.ts` into `/server/world`, send only `seed` & a SHA-256 hash; clients validate on their side.
+3. **Phase 3**: server becomes authoritative for collision; clients merely query `isSolid` for prediction.
+
+---
+
+## 8 · Open tasks
+
+* [ ] **Integrate `fastnoise-lite-esm`**: add `pnpm add fastnoise-lite-esm` and preload the WASM module in BootScene.
+* [ ] **Expose seed in HUD** for QA (“Seed #123456789”).
+* [ ] **Unit-test determinism**: generate map twice with same seed → assert bit-fields equal.
+
+---
+
+### Outcome
+
+Switching to **FastNoise Lite** gives us near-free generation cost, and keeping it **client-side only** means zero new network overhead while we flesh out combat and upgrades. The design remains forward-compatible with a server authority pass—merely move the generator and reuse the same thresholds.

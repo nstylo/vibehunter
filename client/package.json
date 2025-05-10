@@ -1,0 +1,22 @@
+{
+  "name": "vampire-survivors-multiplayer",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vite": "^6.3.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "fastnoise-lite": "^1.1.1",
+    "phaser": "^3.88.2"
+  }
+}

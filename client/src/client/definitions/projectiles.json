@@ -1,0 +1,20 @@
+[
+    {
+        "type": "BULLET",
+        "textureName": "projectile_bullet_texture",
+        "width": 8,
+        "height": 8,
+        "color": "0xffffff",
+        "impactParticleEffect": "bulletImpact",
+        "impactSoundKey": "sfx_bullet_hit"
+    },
+    {
+        "type": "FIREBALL",
+        "textureName": "projectile_fireball_texture",
+        "width": 16,
+        "height": 16,
+        "color": "0xffa500",
+        "impactParticleEffect": "fireballExplosion",
+        "impactSoundKey": "sfx_fireball_hit"
+    }
+] 

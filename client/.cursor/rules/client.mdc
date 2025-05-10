@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+File	Purpose	Key responsibilities	Cross-cuts
+index.html	Thin boot strap	Load main.ts, set <meta viewport>, pre-loads minimal fonts	Keep to <2 KB for fast first paint
+phaserConfig.ts	Config factory	Returns a Phaser.GameConfig; toggles WebGL vs Canvas, physics settings	Reads from constants.ts; never mutate after instantiation
+main.ts	Entry point	Instantiate Phaser.Game; inject NetworkSystem; attach resize listener	Single script tag in index.html; keep side effects here only

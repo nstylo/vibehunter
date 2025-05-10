@@ -1,0 +1,44 @@
+[
+    {
+        "id": "ms_1",
+        "type": "movementSpeed",
+        "name": "Running Shoes",
+        "description": "Increases movement speed by 10%.",
+        "level": 1
+    },
+    {
+        "id": "pd_1",
+        "type": "projectileDamage",
+        "name": "Sharpened Arrowheads",
+        "description": "Increases projectile damage by 2.",
+        "level": 1
+    },
+    {
+        "id": "as_1",
+        "type": "attackSpeed",
+        "name": "Quick Draw Bowstring",
+        "description": "Increases attack speed by 15% (reduces cooldown).",
+        "level": 1
+    },
+    {
+        "id": "psize_1",
+        "type": "projectileSize",
+        "name": "Larger Fletching",
+        "description": "Increases projectile size by 20%.",
+        "level": 1
+    },
+    {
+        "id": "def_1",
+        "type": "defense",
+        "name": "Leather Tunic",
+        "description": "Increases defense by 1.",
+        "level": 1
+    },
+    {
+        "id": "pspeed_1",
+        "type": "projectileSpeed",
+        "name": "Aerodynamic Shafts",
+        "description": "Increases projectile speed by 15%.",
+        "level": 1
+    }
+] 

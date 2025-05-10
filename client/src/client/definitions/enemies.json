@@ -1,0 +1,32 @@
+[
+    {
+        "name": "slime",
+        "assetUrl": "enemy_texture_slime",
+        "width": 40,
+        "height": 40,
+        "defaultHp": 30,
+        "defaultMaxSpeed": 100,
+        "meleeAttackDamage": 10,
+        "meleeAttackRange": 50,
+        "attackCooldown": 1000,
+        "isRanged": false,
+        "rangedAttackRange": null,
+        "projectileType": null,
+        "xpValue": 10
+    },
+    {
+        "name": "goblin",
+        "assetUrl": "enemy_texture_goblin",
+        "width": 40,
+        "height": 40,
+        "defaultHp": 30,
+        "defaultMaxSpeed": 100,
+        "meleeAttackDamage": 10, 
+        "meleeAttackRange": 50,
+        "attackCooldown": 1500,
+        "isRanged": true,
+        "rangedAttackRange": 450,
+        "projectileType": "FIREBALL",
+        "xpValue": 15 
+    }
+] 

@@ -1,0 +1,57 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+BootScene.ts
+Purpose – Load core assets, then start LobbyScene
+
+Flow – preload() → minimal loading bar → create() fires this.scene.start('Lobby')
+
+No game logic—only asset queues and theme colour setup
+
+LobbyScene.ts
+Purpose – UI for name/colour selection and "Start" button
+
+Events/APIs – Emits lobby:join (payload: PlayerMeta) to NetworkSystem
+
+UI – DOM overlay via Phaser's DOMElement helpers (simpler than canvas text for forms)
+
+GameScene.ts (main client gameplay loop)
+Purpose – Render authoritative world, run prediction, capture input, manage display of dynamic combat feedback.
+
+Lifecycle –
+
+create() – build object pools for players/enemies/projectiles
+
+update(t, dt) –
+
+InputSystem.update(dt) (queues inputs)
+
+PredictionSystem.update(dt) (smooth entities)
+
+HudScene.sync() (mirror HP/xp)
+
+Receives state msgs → applySnapshot() for reconciliation
+
+Triggers display of damage numbers on entities based on health changes or damage events.
+
+HudScene.ts
+Purpose – Overlay hearts, XP bar, wave timer, ping readout. Manage settings for combat UI feedback.
+
+Data source – Subscribes to NetworkSystem.on('hud') for deltas.
+
+Gameplay Feedback Toggles: May provide UI elements or respond to console commands (e.g., `globals.EnableDamageNumbers(0,1 or 2)`, `globals.EnableMonsterHealthBars(0,1 or 2)`) to toggle the visibility and behavior of:
+    Monster health bars (e.g., always on, on damage, off).
+    Player health bars (e.g., all players, others only, off).
+    Damage numbers (e.g., normal, cumulative, off).
+    Damage number color schemes.
+
+Constraint – Zero game logic; purely visual and configuration settings.
+
+PauseScene.ts
+Purpose – Catch Esc; darken screen; "Resume / Quit" buttons
+
+Mechanics – Toggles this.scene.pause('Game') and suspense animations
+
+Networking – None (client-side only)

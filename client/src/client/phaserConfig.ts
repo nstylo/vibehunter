@@ -1,0 +1,27 @@
+import Phaser from 'phaser';
+
+const phaserConfig: Phaser.Types.Core.GameConfig = {
+    type: Phaser.WEBGL, // Automatically choose WebGL or Canvas
+    width: 1280,
+    height: 960,
+    parent: 'game-container', // ID of the DOM element to parent the game
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { x: 0, y: 0 },
+            debug: false // Set to true for visual debugging of physics bodies
+        }
+    },
+    render: {
+		autoMobilePipeline: true,
+		antialias: true,
+		pixelArt: false,
+		roundPixels: false,
+	},
+    fps: {
+        target: 60,
+    },
+    scene: []
+};
+
+export default phaserConfig; 

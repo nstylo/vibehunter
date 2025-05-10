@@ -1,0 +1,20 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Sprite	Purpose	Key props	Update rule / Features
+PlayerSprite.ts	Visual & FX shell for a player	id, hp, maxHp, dashCd, ref to remote state	Position set by PredictionSystem; contains screenshake on hit
+        Health Display: Can show a health bar (e.g., above the sprite or managed by HUD). May also display armor if applicable.
+            Configurability: Options for always showing, hiding for self, or disabling entirely.
+        Damage Feedback: When taking damage, floating damage numbers can appear near the sprite indicating the amount of damage received.
+EnemySprite.ts	Same for enemies	type, hp, maxHp	Colour / scale vary by archetype
+        Health Display: Shows a health bar above the sprite.
+            Configurability: Options for always showing, only when not at full health, or disabling entirely.
+        Damage Feedback: When taking damage, floating damage numbers appear, indicating damage dealt.
+            Damage Number Modes: Can be normal (per hit) or cumulative (combining rapid hits into a larger number).
+            Color Coding: Damage numbers can be color-coded based on damage magnitude (e.g., white for small, yellow for medium, blue for large).
+ProjectileSprite.ts	Bullets or beams	ownerId, lifeMs, damageAmount	No physics body → manual XY assignment. Its `damageAmount` contributes to damage numbers shown on hit targets.
+CollectibleSprite.ts	XP gem or power-up	value, glow tween	Float toward player (magnet radius) handled in this class
+
+Objects never own canonical data—only reflect server truth.

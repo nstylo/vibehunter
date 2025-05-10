@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+File	Purpose	Key responsibilities	Cross-cuts
+constants.ts	Central tuning knobs	­Tick time, arena bounds, XP curve, upgrade catalog	No runtime imports from client code—tree-shakable pure data
+types.ts	Single source of truth for DTOs	Vector, EntityState, InputMsg, WorldState, UpgradeId	Never import Phaser here → keeps it node-safe
+messages.ts	(De)serialisation helpers	encodeInput(), decodeState(), byte-packing utilities	Changes require matching bump on server
+rng.ts	Reproducible PRNG	Mulberry32 seeded with lobby-sent seed; returns float 0–1	Used by SpawnSystem (server) and PredictionSystem (client)

@@ -1,0 +1,36 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+InputSystem.ts
+Captures WASD / dash (via Phaser’s EventEmitter)
+
+Maintains inputSeq counter; packs & appends to per-frame buffer
+
+sendBufferedInputs() called each GameScene.update()
+
+NetworkSystem.ts
+WebSocket wrapper
+
+Outgoing – join, input, ping
+
+Incoming – state, gameOver, pong
+
+Emits events to scenes & systems (onState, onHud, onDisconnect)
+
+Tracks RTT; exposes getPing() for HUD
+
+PredictionSystem.ts
+Keeps circular buffer of last N snapshots
+
+Linear-interpolates entities based on render time (serverTime − 100 ms cushion)
+
+On misprediction (player pos delta > ε), “rewinds” local sprite smoothly over 1–2 frames
+
+AudioSystem.ts
+Map of event → sound key – pulled in scenes and objects
+
+2-D sounds (volume pan by world X coordinate)
+
+Mute / unmute persists to localStorage

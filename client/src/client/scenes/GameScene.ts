@@ -69,19 +69,22 @@ export class GameScene extends Phaser.Scene {
     private enemySpawner!: EnemySpawner; // Added EnemySpawner property
     private progressionSystem!: ProgressionSystem; // Add progressionSystem property
     private particleSystem!: ParticleSystem; // Added particle system member
-    
+
     // Network related members
     private networkSystem: NetworkSystem | null = null;
     private isMultiplayer = false;
     private serverUrl = 'ws://127.0.0.1:8080';
     private remotePlayers: Map<string, PlayerSprite> = new Map();
-    
-    public static readonly CELL_WIDTH = 64; 
+
+    public static readonly CELL_WIDTH = 64;
     public static readonly CELL_HEIGHT = 64;
 
     private worldGen!: WorldGen;
     private collisionMap!: CollisionMap;
     private chunkRenderer!: ChunkRenderer;
+
+    private cursorHideTimer?: Phaser.Time.TimerEvent;
+    private readonly CURSOR_HIDE_DELAY = 200; // Time in ms to hide cursor after no movement
 
     constructor() {
         super({ key: 'GameScene' });
@@ -89,10 +92,10 @@ export class GameScene extends Phaser.Scene {
 
     init(data: GameSceneData) {
         const seed = data.worldSeed ?? generateInitialSeed();
-        
+
         this.worldGen = new WorldGen(seed);
         this.collisionMap = new CollisionMap(this.worldGen);
-        
+
         // Set up multiplayer mode if specified
         this.isMultiplayer = data.isMultiplayer ?? false;
         if (data.serverUrl) {
@@ -112,7 +115,7 @@ export class GameScene extends Phaser.Scene {
         const worldPixelWidth = this.collisionMap.getWidth() * GameScene.CELL_WIDTH;
         const worldPixelHeight = this.collisionMap.getHeight() * GameScene.CELL_HEIGHT;
         this.physics.world.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
-        
+
         this.cameras.main.setBackgroundColor('#222222');
 
         // Set up network system if in multiplayer mode
@@ -124,7 +127,7 @@ export class GameScene extends Phaser.Scene {
         const playerX = data.initialPosition?.x ?? worldPixelWidth / 2;
         const playerY = data.initialPosition?.y ?? worldPixelHeight / 2;
         this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer');
-        
+
         // Configure player network mode if multiplayer
         if (this.isMultiplayer && this.networkSystem && this.player) {
             this.player.setNetworkMode(this.networkSystem, false);
@@ -171,7 +174,7 @@ export class GameScene extends Phaser.Scene {
             this.physics.add.overlap(this.projectiles, this.enemies, this.handleProjectileHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
             this.physics.add.overlap(this.projectiles, this.player, this.handleProjectileHitPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
         }
-        
+
         // Collision between enemies themselves (to prevent clumping)
         this.physics.add.collider(this.enemies, this.enemies);
 
@@ -193,7 +196,7 @@ export class GameScene extends Phaser.Scene {
                 this.enemySpawner.startWaveSystem(1); // Start with wave 1 NOW
             }
         });
-        
+
         // Set initial HUD values
         if (this.player) {
             this.game.events.emit('updateHud', {
@@ -203,6 +206,11 @@ export class GameScene extends Phaser.Scene {
                 nextLevelXp: 100
             });
         }
+
+        // Hide the cursor initially
+        this.game.canvas.style.cursor = 'none';
+        // Listen for mouse movement to show and then hide cursor
+        this.input.on('pointermove', this.handleMouseMoveForCursor, this);
 
         // Connect progression system events to HUD
         this.events.on('xpUpdated', (data: { currentXP: number, currentLevel: number, xpToNextLevel: number }) => {
@@ -223,12 +231,12 @@ export class GameScene extends Phaser.Scene {
             // Notify EnemySpawner if an EnemySprite died
             if (payload.entity instanceof EnemySprite && this.enemySpawner) {
                 this.enemySpawner.notifyEnemyDefeated(payload.entity as EnemySprite);
-                
+
                 // If the player killed the enemy, award XP via the progression system
-                if (payload.killer instanceof ProjectileSprite && 
-                    this.player && 
+                if (payload.killer instanceof ProjectileSprite &&
+                    this.player &&
                     payload.killer.ownerId === this.player.entityId) {
-                    
+
                     // Emit enemyKilled event for progressionSystem to handle XP rewards
                     // The amount could vary based on enemy type
                     const xpAmount = payload.entity.xpValue || 10; // Default 10 XP if not specified
@@ -236,16 +244,16 @@ export class GameScene extends Phaser.Scene {
                 }
             } else if (payload.entity instanceof PlayerSprite && payload.entity === this.player) {
                 // Player died, transition to GameOverScene
-                const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() -1 : 0; // Get waves survived
-                
+                const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() - 1 : 0; // Get waves survived
+
                 this.scene.stop('HudScene'); // Stop HUD
                 this.scene.stop(this.scene.key); // Stop current scene (GameScene)
                 this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived });
             }
         });
-        
+
         this.events.on(EVENT_ENTITY_TAKE_DAMAGE, (payload: { target: EntitySprite, damage: number, newHp: number, source?: EntitySprite | ProjectileSprite | string }) => {
-            
+
             // If player took damage, update HUD
             if (payload.target instanceof PlayerSprite && this.player === payload.target) {
                 this.game.events.emit('updateHud', {
@@ -260,18 +268,18 @@ export class GameScene extends Phaser.Scene {
         // Listen to EnemySpawner events for logging (and later UI)
         this.events.on('waveStart', (data: { waveNumber: number, totalEnemies: number }) => {
             // Emit a global event for the HUD
-            this.game.events.emit('updateWaveHud', { 
-                waveNumber: data.waveNumber, 
+            this.game.events.emit('updateWaveHud', {
+                waveNumber: data.waveNumber,
                 enemiesRemaining: data.totalEnemies, // Initially, all enemies are remaining
-                totalEnemiesInWave: data.totalEnemies 
+                totalEnemiesInWave: data.totalEnemies
             });
             // Emit the new event specifically for the wave started message
             this.game.events.emit('newWaveStartedHud', { waveNumber: data.waveNumber });
         });
         this.events.on('enemyDefeatedInWave', (data: { waveNumber: number, enemiesRemaining: number, totalSpawnedThisWave: number, totalToSpawnThisWave: number }) => {
             // Emit a global event for the HUD
-            this.game.events.emit('updateWaveHud', { 
-                waveNumber: data.waveNumber, 
+            this.game.events.emit('updateWaveHud', {
+                waveNumber: data.waveNumber,
                 enemiesRemaining: data.enemiesRemaining,
                 totalEnemiesInWave: data.totalToSpawnThisWave
             });
@@ -291,7 +299,7 @@ export class GameScene extends Phaser.Scene {
     private handleEntityShoot(payload: {
         shooter: EntitySprite,
         ownerId: string,
-        projectileType: string, 
+        projectileType: string,
         direction: Phaser.Math.Vector2,
         targetPosition?: Phaser.Math.Vector2
     }): void {
@@ -372,25 +380,25 @@ export class GameScene extends Phaser.Scene {
         if (!this.player || !this.cursors || !this.player.body) {
             return;
         }
-        
+
         // Update player movement - just handles input and movement
         this.player.updateMovement(this.cursors);
-        
+
         // Give the player the current list of enemies for auto-targeting
         if (this.enemies) {
             this.player.updateEnemiesInRange(this.enemies.getChildren());
         }
-        
+
         // Update enemy spawner
         if (this.enemySpawner) {
             this.enemySpawner.update(time, delta);
         }
-        
+
         // Y-sorting for player
         if (this.player) {
             this.player.setDepth(this.player.y + this.player.displayHeight / 2);
         }
-        
+
         // Enemies update is handled by the group's runChildUpdate: true
         // Y-sorting for enemies
         for (const enemy of this.enemies.getChildren()) {
@@ -410,19 +418,19 @@ export class GameScene extends Phaser.Scene {
         if (this.particleSystem) {
             this.particleSystem.destroy();
         }
-        
+
         // Clean up network connections
         if (this.networkSystem) {
             this.networkSystem.disconnect();
             this.networkSystem = null;
         }
-        
+
         // Clear remote players
         for (const player of this.remotePlayers.values()) {
             player.destroy();
         }
         this.remotePlayers.clear();
-        
+
         // Potentially destroy other systems or clear event listeners if not handled by Phaser automatically
         this.events.off(EVENT_ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
         // ... remove other listeners added with this.events.on ...
@@ -431,7 +439,15 @@ export class GameScene extends Phaser.Scene {
         if (this.scene.isActive('HudScene')) {
             this.scene.stop('HudScene');
         }
-        
+
+        // Restore the cursor and clean up
+        this.game.canvas.style.cursor = 'default';
+        this.input.off('pointermove', this.handleMouseMoveForCursor, this);
+        if (this.cursorHideTimer) {
+            this.cursorHideTimer.remove(false);
+            this.cursorHideTimer = undefined;
+        }
+
         console.log('GameScene shutdown complete.');
     }
 
@@ -440,29 +456,29 @@ export class GameScene extends Phaser.Scene {
      */
     private setupNetworkSystem(): void {
         this.networkSystem = new NetworkSystem();
-        
+
         // Set up network event listeners
         this.networkSystem.on('connected', () => {
             console.log('Successfully connected to game server!');
-            
+
             // Send connect message to the server
             this.networkSystem?.sendConnectMessage(`Player_${Math.floor(Math.random() * 1000)}`);
         });
-        
+
         this.networkSystem.on('messageReceived', (message: ServerMessage) => {
             this.handleNetworkMessage(message);
         });
-        
+
         this.networkSystem.on('disconnected', (event: { code: number, reason: string }) => {
             console.log(`Disconnected from server. Code: ${event.code}, Reason: ${event.reason}`);
             // Optionally handle fallback to singleplayer
         });
-        
+
         // Connect to the server
         console.log(`Connecting to game server at ${this.serverUrl}...`);
         this.networkSystem.connect(this.serverUrl);
     }
-    
+
     /**
      * Handle messages from the network
      */
@@ -474,45 +490,62 @@ export class GameScene extends Phaser.Scene {
                 if (this.player && playerData.id === this.player.playerId) {
                     continue;
                 }
-                
+
                 // Update or create remote player
                 this.updateRemotePlayer(playerData);
             }
         }
     }
-    
+
     /**
      * Update or create a remote player instance
      */
     private updateRemotePlayer(playerData: RemotePlayerData): void {
         const { id, position } = playerData;
-        
+
         // Check if we already have this remote player
         let remotePlayer = this.remotePlayers.get(id);
-        
+
         if (!remotePlayer) {
             // Create new remote player sprite
             remotePlayer = new PlayerSprite(this, position.x, position.y, id);
-            
+
             // Mark as network controlled
             if (this.networkSystem) {
                 remotePlayer.setNetworkMode(this.networkSystem, true);
             }
-            
+
             // Add to physics system if needed
             this.physics.add.existing(remotePlayer);
-            
+
             // Store in our map
             this.remotePlayers.set(id, remotePlayer);
-            
+
             // Add any necessary colliders
             const tilemapLayer = this.chunkRenderer.tilemapLayer;
             if (tilemapLayer) {
                 this.physics.add.collider(remotePlayer, tilemapLayer);
             }
         }
-        
+
         // Update the remote player's position
         remotePlayer.updateFromNetwork(position.x, position.y);
+    }
+
+    private handleMouseMoveForCursor(): void {
+        // Show the cursor
+        this.game.canvas.style.cursor = 'default';
+
+        // Clear any existing timer
+        if (this.cursorHideTimer) {
+            this.cursorHideTimer.remove(false);
+        }
+
+        // Set a timer to hide the cursor again
+        this.cursorHideTimer = this.time.delayedCall(this.CURSOR_HIDE_DELAY, () => {
+            if (this.scene.isActive()) { // Only hide if the scene is still active
+                this.game.canvas.style.cursor = 'none';
+            }
+        }, [], this);
     }
 } 

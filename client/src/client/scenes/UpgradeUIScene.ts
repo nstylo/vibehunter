@@ -25,15 +25,15 @@ export class UpgradeUIScene extends Phaser.Scene {
 
     create(): void {
         const cam = this.cameras.main;
-        
+
         // Set the camera to ignore the game's camera movement
         this.cameras.main.setScroll(0, 0);
-        
+
         // Adjust title and card positions with more spacing
         const titleYPosition = 80; // Move down for more space from top
         const levelTextYPosition = titleYPosition + 60; // More space below title
         const cardsYPosition = levelTextYPosition + 100; // More space below level text
-        
+
         // Add a drop shadow effect for better readability without background
         const dropShadow = {
             offsetX: 2,
@@ -46,10 +46,10 @@ export class UpgradeUIScene extends Phaser.Scene {
         // Main title - bigger and with shadow
         const titleText = this.add.text(
             cam.centerX,
-            titleYPosition, 
+            titleYPosition,
             'Level Up!',
-            { 
-                fontFamily: UPGRADE_FONT_FAMILY, 
+            {
+                fontFamily: UPGRADE_FONT_FAMILY,
                 fontSize: '48px', // Larger font
                 color: '#ffd700', // Gold color for level up
                 fontStyle: 'bold',
@@ -58,15 +58,15 @@ export class UpgradeUIScene extends Phaser.Scene {
                 strokeThickness: 6 // Thicker stroke for better visibility
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
-         .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
-        
+            .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
+
         // Level information - larger with shadow
         const levelInfoText = this.add.text(
             cam.centerX,
             levelTextYPosition,
             `You reached Level ${this.currentLevel}! Choose an upgrade:`,
-            { 
-                fontFamily: UPGRADE_FONT_FAMILY, 
+            {
+                fontFamily: UPGRADE_FONT_FAMILY,
                 fontSize: '28px', // Larger font
                 color: '#ffffff', // Brighter text
                 fontStyle: 'bold',
@@ -75,7 +75,7 @@ export class UpgradeUIScene extends Phaser.Scene {
                 strokeThickness: 4
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
-         .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
+            .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
 
         const numChoices = this.choices.length;
         const cardWidth = 300; // Wider cards
@@ -83,6 +83,8 @@ export class UpgradeUIScene extends Phaser.Scene {
         const cardMargin = 50; // More space between cards
         const totalCardsWidth = (numChoices * cardWidth) + ((numChoices - 1) * cardMargin);
         const initialXOffset = cam.centerX - totalCardsWidth / 2;
+
+        const localCardContainers: Phaser.GameObjects.Container[] = []; // To store card containers for keyboard interaction
 
         this.choices.forEach((choice, index) => {
             const cardX = initialXOffset + cardWidth / 2 + index * (cardWidth + cardMargin);
@@ -103,13 +105,13 @@ export class UpgradeUIScene extends Phaser.Scene {
 
             // Title positioned higher in the card for more spacing
             const choiceNameText = this.add.text(
-                0, 
+                0,
                 -cardHeight / 2 + 35, // More space from top
                 choice.name,
-                { 
-                    fontFamily: UPGRADE_FONT_FAMILY, 
+                {
+                    fontFamily: UPGRADE_FONT_FAMILY,
                     fontSize: '26px', // Larger font
-                    color: '#ffffff', 
+                    color: '#ffffff',
                     fontStyle: 'bold',
                     align: 'center',
                     wordWrap: { width: cardWidth - 40 }, // More padding
@@ -121,11 +123,11 @@ export class UpgradeUIScene extends Phaser.Scene {
 
             // Description moved lower for more spacing
             const choiceDescText = this.add.text(
-                0, 
+                0,
                 cardHeight / 2 - 40, // More space from bottom
                 choice.description,
                 {
-                    fontFamily: UPGRADE_FONT_FAMILY, 
+                    fontFamily: UPGRADE_FONT_FAMILY,
                     fontSize: '18px', // Larger font
                     color: '#cccccc',
                     align: 'center',
@@ -135,6 +137,23 @@ export class UpgradeUIScene extends Phaser.Scene {
                 }
             ).setOrigin(0.5).setScrollFactor(0);
             cardContainer.add(choiceDescText);
+
+            // Add number text (1, 2, or 3) to the bottom-right corner of the card
+            const numberText = this.add.text(
+                cardWidth / 2 - 15, // Position from the right edge
+                cardHeight / 2 - 15, // Position from the bottom edge
+                (index + 1).toString(),
+                {
+                    fontFamily: UPGRADE_FONT_FAMILY,
+                    fontSize: '22px', // Prominent but not overpowering
+                    color: '#ffffff',
+                    fontStyle: 'bold',
+                    align: 'right',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            ).setOrigin(1, 1).setScrollFactor(0); // Origin bottom-right
+            cardContainer.add(numberText);
 
             cardContainer.setSize(cardWidth, cardHeight);
             cardContainer.setInteractive()
@@ -179,6 +198,38 @@ export class UpgradeUIScene extends Phaser.Scene {
                     cardBackground.lineStyle(3, 0x555555, 1);
                     cardBackground.strokeRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 16);
                 });
+            localCardContainers.push(cardContainer); // Store the container
+        });
+
+        // Add keyboard listeners for 1, 2, 3 keys
+        const keyEventNames = ['ONE', 'TWO', 'THREE'];
+        keyEventNames.forEach((keyName, index) => {
+            if (index < this.choices.length) { // Check if the choice for this key exists
+                const choiceToSelect = this.choices[index];
+                const containerToAnimate = localCardContainers[index]; // Corresponding container
+
+                this.input.keyboard?.on(`keydown-${keyName}`, () => {
+                    if (choiceToSelect) { // Ensure choiceToSelect is defined
+                        if (containerToAnimate) {
+                            // Trigger the same animation and selection logic as POINTER_DOWN
+                            this.tweens.add({
+                                targets: containerToAnimate,
+                                scaleX: 0.95,
+                                scaleY: 0.95,
+                                duration: 80,
+                                yoyo: true,
+                                onComplete: () => {
+                                    containerToAnimate.setScale(1);
+                                    this.selectUpgrade(choiceToSelect);
+                                }
+                            });
+                        } else {
+                            // Fallback if container somehow not found (should not happen if logic is correct)
+                            this.selectUpgrade(choiceToSelect);
+                        }
+                    }
+                });
+            }
         });
     }
 
@@ -190,7 +241,7 @@ export class UpgradeUIScene extends Phaser.Scene {
         // if (this.scene.isPaused(MAIN_GAME_SCENE_KEY)) {
         //     this.scene.resume(MAIN_GAME_SCENE_KEY);
         // }
-        
+
         this.scene.stop(); // Stop this UI scene
     }
 } 

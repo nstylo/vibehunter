@@ -1,0 +1,16 @@
+{
+  "name": "vibehunter",
+  "version": "1.0.0",
+  "description": "2D survival game with procedural map generation",
+  "scripts": {
+    "extract-sprites": "bun run scripts/extract-sprites.ts"
+  },
+  "dependencies": {
+    "sharp": "^0.33.2",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.3",
+    "typescript": "^5.3.3"
+  }
+} 

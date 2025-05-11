@@ -15,6 +15,10 @@ export default class BootScene extends Phaser.Scene {
         for (let i = 1; i <= 36; i++) {
             this.load.image(`enemy_${i}`, `assets/enemies/${i}.png`);
         }
+
+        // Preload static map assets
+        this.load.image('mega-map', 'assets/map/mega-map.png');
+        this.load.json('mapHitboxData', 'assets/map/map-hitboxes.json');
     }
 
     create() {

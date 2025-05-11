@@ -1,8 +1,4 @@
 import Phaser from 'phaser';
-import { WorldGen } from '../world/WorldGen';
-import { CollisionMap } from '../world/CollisionMap';
-import { ChunkRenderer } from '../world/ChunkRenderer';
-import { generateInitialSeed } from '../../common/world'; // For a default seed
 import { PlayerSprite } from '../objects/PlayerSprite'; // Changed to named import
 import { EnemySprite } from '../objects/EnemySprite'; // Import EnemySprite
 import ProjectileSprite, { ProjectileType } from '../objects/ProjectileSprite'; // Import ProjectileSprite and its enum
@@ -22,6 +18,7 @@ import { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } from '../types/multiplayer'; // Import multiplayer types
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
 import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
+import { HitboxCollisionManager } from '../world/HitboxCollisionManager'; // ADDED
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -93,9 +90,8 @@ export class GameScene extends Phaser.Scene {
     public static readonly CELL_WIDTH = 64;
     public static readonly CELL_HEIGHT = 64;
 
-    private worldGen!: WorldGen;
-    private collisionMap!: CollisionMap;
-    private chunkRenderer!: ChunkRenderer;
+    private hitboxCollisionManager!: HitboxCollisionManager; // ADDED
+    private buildings!: Phaser.Physics.Arcade.StaticGroup; // ADDED for static building colliders
 
     private cursorHideTimer?: Phaser.Time.TimerEvent;
     private readonly CURSOR_HIDE_DELAY = 200; // Time in ms to hide cursor after no movement
@@ -105,11 +101,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     init(data: GameSceneData) {
-        const seed = data.worldSeed ?? generateInitialSeed();
-
-        this.worldGen = new WorldGen(seed);
-        this.collisionMap = new CollisionMap(this.worldGen);
-
         // Set up multiplayer mode if specified
         this.isMultiplayer = data.isMultiplayer ?? false;
         if (data.serverUrl) {
@@ -133,7 +124,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     create(data: GameSceneData) {
-        this.chunkRenderer = new ChunkRenderer(this, this.worldGen);
+        // ADDED: Display the static map
+        this.add.image(0, 0, 'mega-map').setOrigin(0, 0).setDepth(-20); // Ensure it's behind everything
+
+        // ADDED: Get map dimensions from JSON (or hardcode if known fixed)
+        const mapHitboxData = this.cache.json.get('mapHitboxData');
+        const mapWidth = mapHitboxData?.mapWidth ?? 10000; // Default to 10000 if not in JSON
+        const mapHeight = mapHitboxData?.mapHeight ?? 10000;
 
         // Create the dynamic XP orb texture
         this.createXpOrbTexture();
@@ -141,9 +138,7 @@ export class GameScene extends Phaser.Scene {
         // Instantiate ParticleSystem early
         this.particleSystem = new ParticleSystem(this); // Instantiated ParticleSystem
 
-        const worldPixelWidth = this.collisionMap.getWidth() * GameScene.CELL_WIDTH;
-        const worldPixelHeight = this.collisionMap.getHeight() * GameScene.CELL_HEIGHT;
-        this.physics.world.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
+        this.physics.world.setBounds(0, 0, mapWidth, mapHeight); // Use new map dimensions
 
         this.cameras.main.setBackgroundColor('#222222');
 
@@ -153,8 +148,8 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Initialize player BEFORE setting up collision
-        const playerX = data.initialPosition?.x ?? worldPixelWidth / 2;
-        const playerY = data.initialPosition?.y ?? worldPixelHeight / 2;
+        const playerX = data.initialPosition?.x ?? mapWidth / 2;
+        const playerY = data.initialPosition?.y ?? mapHeight / 2;
         this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', this.particleSystem);
 
         // Configure player network mode if multiplayer
@@ -180,6 +175,27 @@ export class GameScene extends Phaser.Scene {
             runChildUpdate: true // Ensure XpOrb's preUpdate is called
         });
 
+        // ADDED: Initialize HitboxCollisionManager and create building colliders
+        if (mapHitboxData?.objects) {
+            this.hitboxCollisionManager = new HitboxCollisionManager(mapHitboxData.objects);
+            this.buildings = this.physics.add.staticGroup();
+            for (const obj of this.hitboxCollisionManager.getAllObjects()) {
+                if (obj.category === 'building') {
+                    // Create a static physics body for each building
+                    // Adjust origin if necessary, but x,y from JSON are usually top-left
+                    const buildingCollider = this.buildings.create(obj.x + obj.width / 2, obj.y + obj.height / 2, undefined);
+                    buildingCollider.setSize(obj.width, obj.height);
+                    buildingCollider.setVisible(false); // The building is already part of the visual map
+                    buildingCollider.refreshBody();
+                }
+            }
+        } else {
+            console.error("GameScene: Map hitbox data not found or invalid. Cannot create collision manager or buildings.");
+            // Fallback or error state if map data is missing
+            this.hitboxCollisionManager = new HitboxCollisionManager([]); // Init with empty if no data
+            this.buildings = this.physics.add.staticGroup();
+        }
+
         // Setup Enemy Spawner
         if (this.player) {
             this.enemySpawner = new EnemySpawner(this, this.player, this.enemies, WAVE_DEFINITIONS, this.particleSystem); // Pass particleSystem
@@ -189,20 +205,11 @@ export class GameScene extends Phaser.Scene {
             this.progressionSystem = new ProgressionSystem(this, this.player);
         }
 
-        // Get the tilemap layer from the chunk renderer
-        const tilemapLayer = this.chunkRenderer.tilemapLayer;
-
-        if (tilemapLayer) {
-            // Tile index 2 corresponds to CellType.SOLID (stone)
-            tilemapLayer.setCollision(2);
-            tilemapLayer.setDepth(-10); // Ensure tilemap is rendered behind entities
-            if (this.player) {
-                this.physics.add.collider(this.player, tilemapLayer); // Player vs World
-            }
-            this.physics.add.collider(this.enemies, tilemapLayer); // Enemies vs World
-        } else {
-            console.error('GameScene: Tilemap layer not available from ChunkRenderer for collision setup.');
+        // ADDED: New collision with static buildings
+        if (this.player) {
+            this.physics.add.collider(this.player, this.buildings);
         }
+        this.physics.add.collider(this.enemies, this.buildings);
 
         // Collision between player and enemies
         if (this.player) {
@@ -224,7 +231,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.cameras.main.startFollow(this.player, true, 1, 1);
-        this.cameras.main.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
+        this.cameras.main.setBounds(0, 0, mapWidth, mapHeight); // Use new map dimensions
         this.cameras.main.roundPixels = true; // For smoother, pixel-perfect camera movement
         
         // Set initial zoom
@@ -484,7 +491,7 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private showFloatingText(text: string, x: number, y: number, color: string, fontSize: string = '16px'): void {
+    private showFloatingText(text: string, x: number, y: number, color: string, fontSize = '16px'): void {
         const randomXOffset = Phaser.Math.Between(-15, 15);
         const textObject = this.add.text(x + randomXOffset, y, text, {
             fontFamily: 'Arial', // Using a pixel-art friendly font if available
@@ -731,9 +738,8 @@ export class GameScene extends Phaser.Scene {
             this.remotePlayers.set(id, remotePlayer);
 
             // Add any necessary colliders
-            const tilemapLayer = this.chunkRenderer.tilemapLayer;
-            if (tilemapLayer) {
-                this.physics.add.collider(remotePlayer, tilemapLayer);
+            if (this.buildings) { // ADDED collision with static buildings for remote players
+                this.physics.add.collider(remotePlayer, this.buildings);
             }
         }
 

@@ -9,6 +9,7 @@ const OUTPUT_DIR = path.join(__dirname, 'output');
 const TEMP_DIR = path.join(OUTPUT_DIR, 'temp');
 const OUTPUT_FILE = 'game-map.png';
 const FINAL_OUTPUT_FILE = 'mega-map.png';
+const HITBOX_JSON_FILE = 'map-hitboxes.json'; // JSON file for hitbox data
 const TILE_WIDTH = 1000;
 const TILE_HEIGHT = 1000;
 const GRID_SIZE_X = 10;
@@ -35,6 +36,24 @@ interface PlacedObject {
   height: number;
 }
 
+// New interface for hitbox data that will be saved to JSON
+interface HitboxData {
+  id: number;
+  tileX: number; // Tile X position in grid
+  tileY: number; // Tile Y position in grid
+  filename: string;
+  category: string;
+  x: number; // Global X position in mega-map
+  y: number; // Global Y position in mega-map
+  width: number;
+  height: number;
+  scale: number;
+}
+
+// Global array to track all placed objects for hitbox generation
+const allPlacedObjects: HitboxData[] = [];
+let objectIdCounter = 0;
+
 async function generateMegaMap() {
   console.log('===== Starting Mega Map Generation =====');
   console.log(`Will generate a ${FINAL_WIDTH}x${FINAL_HEIGHT} map from ${GRID_SIZE_X}x${GRID_SIZE_Y} tiles`);
@@ -45,6 +64,10 @@ async function generateMegaMap() {
     await fs.mkdir(TEMP_DIR, { recursive: true });
     console.log(`Created output directories: ${OUTPUT_DIR} and ${TEMP_DIR}`);
     
+    // Clear the global objects array before starting
+    allPlacedObjects.length = 0;
+    objectIdCounter = 0;
+    
     // Step 1: Generate multiple map tiles
     console.log('Generating individual map tiles...');
     const tileFiles = await generateMapTiles(GRID_SIZE_X * GRID_SIZE_Y);
@@ -52,6 +75,10 @@ async function generateMegaMap() {
     // Step 2: Stitch tiles into mega map
     console.log('Stitching tiles into mega map...');
     const megaMapPath = await stitchTilesToMegaMap(tileFiles);
+    
+    // Step 3: Save hitbox data to JSON
+    console.log('Saving hitbox data to JSON...');
+    await saveHitboxData();
     
     // Open the file after generation (macOS specific)
     exec(`open "${megaMapPath}"`, (error) => {
@@ -85,8 +112,12 @@ async function generateMapTiles(count: number): Promise<string[]> {
       console.log(`Generating tile ${i + 1}/${count}...`);
       const tilePath = path.join(TEMP_DIR, `tile-${i}.png`);
       
+      // Calculate grid position for this tile
+      const tileX = i % GRID_SIZE_X;
+      const tileY = Math.floor(i / GRID_SIZE_X);
+      
       // Add unique sprites to the background
-      await addSpritesToBackground(sharedBgPath, tilePath);
+      await addSpritesToBackground(sharedBgPath, tilePath, tileX, tileY);
       
       tileFiles.push(tilePath);
       console.log(`Tile ${i + 1} saved to ${tilePath}`);
@@ -187,7 +218,7 @@ async function generateSimpleMap() {
     // Step 2: Create final map with sprites
     const outputPath = path.join(OUTPUT_DIR, OUTPUT_FILE);
     console.log('Loading sprites and placing them on background...');
-    await addSpritesToBackground(bgOutputPath, outputPath);
+    await addSpritesToBackground(bgOutputPath, outputPath, 0, 0);
     console.log(`Final map saved to ${outputPath}`);
     
     // Open the file after generation (macOS specific)
@@ -288,7 +319,12 @@ async function createSolidBackground(outputPath: string): Promise<void> {
 /**
  * Add sprites to an existing background image
  */
-async function addSpritesToBackground(backgroundPath: string, outputPath: string): Promise<void> {
+async function addSpritesToBackground(
+  backgroundPath: string, 
+  outputPath: string,
+  tileX: number,  // X position of tile in grid
+  tileY: number   // Y position of tile in grid
+): Promise<void> {
   try {
     // Load sprites
     const sprites = await loadSomeSprites();
@@ -305,7 +341,7 @@ async function addSpritesToBackground(backgroundPath: string, outputPath: string
     const backgroundImage = sharp(backgroundPath);
     
     // Create composites for sprites
-    const composites = await createComposites(sprites);
+    const composites = await createComposites(sprites, tileX, tileY);
     console.log(`Created ${composites.length} composites`);
     
     // Add sprites to background and save
@@ -389,7 +425,11 @@ async function loadSomeSprites(): Promise<SpriteInfo[]> {
 }
 
 // Create composite operations for the sprites
-async function createComposites(sprites: SpriteInfo[]): Promise<sharp.OverlayOptions[]> {
+async function createComposites(
+  sprites: SpriteInfo[],
+  tileX: number,  // X position of tile in grid
+  tileY: number   // Y position of tile in grid
+): Promise<sharp.OverlayOptions[]> {
   const composites: sharp.OverlayOptions[] = [];
   const placedObjects: PlacedObject[] = [];
   const usedSpriteIndices: number[] = []; // Track which sprites have been used
@@ -479,6 +519,28 @@ async function createComposites(sprites: SpriteInfo[]): Promise<sharp.OverlayOpt
             
             // Track the placed object
             placedObjects.push({ x, y, width, height });
+            
+            // Add to global tracking list with adjusted coordinates for mega-map
+            const globalX = tileX * TILE_WIDTH + x;
+            const globalY = tileY * TILE_HEIGHT + y;
+            
+            // Determine category based on filename if not already set
+            const category = sprite.category || 
+                              (sprite.filename.startsWith('building_') ? 'building' :
+                               sprite.filename.startsWith('car') ? 'car' : 'decor');
+            
+            allPlacedObjects.push({
+              id: objectIdCounter++,
+              tileX,
+              tileY,
+              filename: sprite.filename,
+              category,
+              x: globalX,
+              y: globalY,
+              width,
+              height,
+              scale
+            });
             
             // Mark the grid as occupied
             markOccupied(x, y, width, height, grid, GRID_SIZE);
@@ -570,6 +632,30 @@ function markOccupied(
         grid[gy][gx] = true;
       }
     }
+  }
+}
+
+/**
+ * Save all placed objects to a JSON file for hitbox creation
+ */
+async function saveHitboxData(): Promise<void> {
+  const hitboxData = {
+    mapWidth: FINAL_WIDTH,
+    mapHeight: FINAL_HEIGHT,
+    tileWidth: TILE_WIDTH,
+    tileHeight: TILE_HEIGHT,
+    gridSizeX: GRID_SIZE_X,
+    gridSizeY: GRID_SIZE_Y,
+    objects: allPlacedObjects
+  };
+
+  const outputPath = path.join(OUTPUT_DIR, HITBOX_JSON_FILE);
+  
+  try {
+    await fs.writeFile(outputPath, JSON.stringify(hitboxData, null, 2));
+    console.log(`Saved hitbox data to ${outputPath} (${allPlacedObjects.length} objects)`);
+  } catch (error) {
+    console.error('Error saving hitbox data:', error);
   }
 }
 

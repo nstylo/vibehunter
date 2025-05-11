@@ -5,13 +5,20 @@ import { type IPlayerStats, DEFAULT_PLAYER_STATS } from '../../common/PlayerStat
 import type NetworkSystem from '../systems/NetworkSystem'
 import type { NetworkAware } from '../types/multiplayer';
 
-const PLAYER_WIZARD_TEXTURE_KEY = 'player_wizard_texture';
-const PLAYER_WIDTH = 48;
-const PLAYER_HEIGHT = 72;
+const CHARACTER_SPRITE_KEYS = [
+    'character_front_1', 'character_front_2', 'character_front_3', 'character_front_4',
+    'character_front_5', 'character_front_6', 'character_front_7', 'character_front_8',
+    'character_front_9', 'character_front_10', 'character_front_11', 'character_front_12',
+    'character_front_13', 'character_front_14', 'character_front_15', 'character_front_16',
+    'character_front_17', 'character_front_18', 'character_front_19', 'character_front_20'
+];
+
+const PLAYER_WIDTH = 128;
+const PLAYER_HEIGHT = 128;
 
 // Define dedicated physics size, smaller than visual texture
 const PLAYER_PHYSICS_WIDTH = 32;
-const PLAYER_PHYSICS_HEIGHT = 48;
+const PLAYER_PHYSICS_HEIGHT = 64;
 
 const PLAYER_DASH_SPEED_MULTIPLIER = 2.5;
 const PLAYER_DASH_DURATION = 150; // ms
@@ -56,13 +63,11 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private keyD: Phaser.Input.Keyboard.Key | undefined;
 
     constructor(scene: Phaser.Scene, x: number, y: number, playerId: string) {
-        // Generate texture if it doesn't exist
-        if (!scene.textures.exists(PLAYER_WIZARD_TEXTURE_KEY)) {
-            PlayerSprite.generatePlayerTexture(scene);
-        }
+        // Select a random sprite key
+        const randomSpriteKey = Phaser.Math.RND.pick(CHARACTER_SPRITE_KEYS);
 
         // Initialize with default stats that will be soon updated by ProgressionSystem
-        super(scene, x, y, PLAYER_WIZARD_TEXTURE_KEY, playerId,
+        super(scene, x, y, randomSpriteKey, playerId,
             DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
             DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
             DEFAULT_PLAYER_STATS.movementSpeed); // Use from DEFAULT_PLAYER_STATS
@@ -215,7 +220,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
      * @param networkSystem The network system to use for multiplayer
      * @param isNetworkControlled Whether this player is controlled by the network (remote player)
      */
-    public setNetworkMode(networkSystem: NetworkSystem | null, isNetworkControlled: boolean = false): void {
+    public setNetworkMode(networkSystem: NetworkSystem | null, isNetworkControlled = false): void {
         this.networkSystem = networkSystem;
         this.isNetworkControlled = isNetworkControlled;
 
@@ -251,9 +256,12 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
         if (leftPressed) {
             inputTargetVelocityX = -this.maxSpeed;
+            this.setFlipX(true); // Face left
         } else if (rightPressed) {
             inputTargetVelocityX = this.maxSpeed;
+            this.setFlipX(false); // Face right
         }
+        // If no horizontal movement input, flipX remains as is (allowing auto-shoot to control it)
 
         if (upPressed) {
             inputTargetVelocityY = -this.maxSpeed;
@@ -329,7 +337,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     /**
      * Sends current position to the server
      */
-    private sendPositionUpdate(force: boolean = false): void {
+    private sendPositionUpdate(force = false): void {
         if (!this.networkSystem || this.isNetworkControlled) return;
 
         // Only send if position has changed or force is true
@@ -359,184 +367,4 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         }
         super.destroy(fromScene);
     }
-
-    static generatePlayerTexture(scene: Phaser.Scene): void {
-        const canvas = scene.textures.createCanvas(PLAYER_WIZARD_TEXTURE_KEY, PLAYER_WIDTH, PLAYER_HEIGHT);
-        if (!canvas) {
-            console.error('PlayerSprite: Failed to create canvas texture for player.');
-            return;
-        }
-        const ctx = canvas.context;
-
-        // Robe base
-        ctx.fillStyle = '#3A4D8F'; // Dark blue
-        ctx.beginPath();
-        // More detailed robe shape
-        ctx.moveTo(PLAYER_WIDTH * 0.2, PLAYER_HEIGHT * 0.35); // Start a bit lower for neck
-        ctx.lineTo(PLAYER_WIDTH * 0.1, PLAYER_HEIGHT * 0.4);  // Left shoulder
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.05, PLAYER_HEIGHT * 0.7, PLAYER_WIDTH * 0.15, PLAYER_HEIGHT * 0.95); // Left sleeve opening
-        ctx.lineTo(PLAYER_WIDTH * 0.2, PLAYER_HEIGHT); // Bottom left
-        ctx.lineTo(PLAYER_WIDTH * 0.8, PLAYER_HEIGHT); // Bottom right
-        ctx.lineTo(PLAYER_WIDTH * 0.85, PLAYER_HEIGHT * 0.95); // Right sleeve opening
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.95, PLAYER_HEIGHT * 0.7, PLAYER_WIDTH * 0.9, PLAYER_HEIGHT * 0.4); // Right shoulder
-        ctx.lineTo(PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.35); // Back to top right
-        ctx.closePath();
-        ctx.fill();
-
-        // Robe shading - attempt at more subtle folds
-        ctx.fillStyle = '#2A3B6D'; // Darker blue for shading
-
-        // Left side shading (simulating a fold or shadow)
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.25, PLAYER_HEIGHT * 0.4);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.2, PLAYER_HEIGHT * 0.7, PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.95);
-        ctx.lineTo(PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.95);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.65, PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Right side shading
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.75, PLAYER_HEIGHT * 0.4);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.7, PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.95);
-        ctx.lineTo(PLAYER_WIDTH * 0.65, PLAYER_HEIGHT * 0.95);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.65, PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Central deeper shadow
-        ctx.fillStyle = '#1F2C57'; // Even darker blue
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.45, PLAYER_HEIGHT * 0.35);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.6, PLAYER_WIDTH * 0.45, PLAYER_HEIGHT * 0.98);
-        ctx.lineTo(PLAYER_WIDTH * 0.55, PLAYER_HEIGHT * 0.98);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.6, PLAYER_HEIGHT * 0.6, PLAYER_WIDTH * 0.55, PLAYER_HEIGHT * 0.35);
-        ctx.closePath();
-        ctx.fill();
-
-        // Head - slightly more defined shape
-        ctx.fillStyle = '#F0DBC1'; // Light skin tone
-        ctx.beginPath();
-        // Slightly larger head for better face visibility
-        ctx.arc(PLAYER_WIDTH / 2, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.17, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Eyes (simple dots, slightly larger)
-        ctx.fillStyle = '#222222'; // Dark color for eyes
-        ctx.beginPath();
-        ctx.arc(PLAYER_WIDTH * 0.44, PLAYER_HEIGHT * 0.24, PLAYER_WIDTH * 0.03, 0, Math.PI * 2); // Left eye
-        ctx.arc(PLAYER_WIDTH * 0.56, PLAYER_HEIGHT * 0.24, PLAYER_WIDTH * 0.03, 0, Math.PI * 2); // Right eye
-        ctx.fill();
-
-        // Nose (subtle shading, slightly more prominent)
-        ctx.fillStyle = '#D8C3A9'; // Darker skin tone for nose/shading
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.47, PLAYER_HEIGHT * 0.26);
-        ctx.lineTo(PLAYER_WIDTH * 0.53, PLAYER_HEIGHT * 0.26);
-        ctx.lineTo(PLAYER_WIDTH * 0.50, PLAYER_HEIGHT * 0.29);
-        ctx.closePath();
-        ctx.fill();
-
-        // Face shading (cheek emphasis)
-        ctx.fillStyle = '#D8C3A9'; // Darker skin tone
-        ctx.beginPath();
-        ctx.arc(PLAYER_WIDTH * 0.55, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.08, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Hat base - aiming for a more traditional pointy wizard hat
-        ctx.fillStyle = '#6A0DAD'; // Purple
-
-        // Brim - more elliptical and consistent
-        ctx.beginPath();
-        ctx.ellipse(PLAYER_WIDTH / 2, PLAYER_HEIGHT * 0.23, PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.05, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Hat cone - sharper point
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.22); // Left base of cone
-        ctx.lineTo(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * -0.05); // Point of the hat (higher for sharper point)
-        ctx.lineTo(PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.22); // Right base of cone
-        ctx.closePath();
-        ctx.fill();
-
-        // Hat band
-        ctx.fillStyle = '#4A0B77'; // Darker purple for band and shading
-        // Adjust band to fit new brim shape
-        const bandHeight = PLAYER_HEIGHT * 0.03;
-        const bandY = PLAYER_HEIGHT * 0.23 - bandHeight / 2; // Center on the brim edge
-        ctx.fillRect(PLAYER_WIDTH * 0.25, bandY, PLAYER_WIDTH * 0.5, bandHeight);
-
-        // Hat shading on the cone - simplified for a conical shape
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * -0.05); // Tip of the hat
-        ctx.lineTo(PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.22); // Bottom-left of cone
-        ctx.lineTo(PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.22); // Create a sliver for shading on one side
-        ctx.closePath();
-        ctx.fill();
-
-        // Wand - making it bigger
-        // Position the wand to look like it is held or emerging from the right sleeve area
-        const wandX = PLAYER_WIDTH * 0.75; // Keep X position, or adjust slightly if needed
-        const wandY = PLAYER_HEIGHT * 0.45; // Adjust Y to account for shorter beard / different pose
-        const wandWidth = PLAYER_WIDTH * 0.08; // Increased width
-        const wandLength = PLAYER_HEIGHT * 0.5; // Increased length
-
-        // Wand shaft
-        ctx.fillStyle = '#8B4513'; // SaddleBrown
-        ctx.beginPath();
-        ctx.rect(wandX, wandY, wandWidth, wandLength);
-        ctx.fill();
-
-        // Wand tip (slightly lighter or different color)
-        ctx.fillStyle = '#D2B48C'; // Tan or a light magical color
-        const tipHeight = PLAYER_HEIGHT * 0.05;
-        ctx.beginPath();
-        ctx.ellipse(wandX + wandWidth / 2, wandY + tipHeight / 2, wandWidth * 0.7, tipHeight / 2, 0, 0, Math.PI * 2); // Small sphere/orb at the tip
-        // Or a simpler square tip:
-        // ctx.rect(wandX - wandWidth * 0.1, wandY - tipHeight, wandWidth * 1.2, tipHeight);
-        ctx.fill();
-
-        // Beard - shorter and slightly less wide to show more face
-        ctx.fillStyle = '#AAAAAA'; // Grey
-        ctx.beginPath();
-        // Adjust curves for a shorter, less voluminous beard
-        ctx.moveTo(PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.28); // Start a bit narrower
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.4, PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.45); // Shorter left curve
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.6, PLAYER_HEIGHT * 0.45); // Shorter bottom curve
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.4, PLAYER_WIDTH * 0.65, PLAYER_HEIGHT * 0.28); // Shorter right curve
-        ctx.closePath();
-        ctx.fill();
-
-        // Beard highlights - adjust to shorter beard
-        ctx.fillStyle = '#CCCCCC'; // Lighter grey
-        // Strand 1 (left)
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.40, PLAYER_HEIGHT * 0.3);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.42, PLAYER_HEIGHT * 0.4, PLAYER_WIDTH * 0.42, PLAYER_HEIGHT * 0.42);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.45, PLAYER_HEIGHT * 0.38, PLAYER_WIDTH * 0.44, PLAYER_HEIGHT * 0.3);
-        ctx.closePath();
-        ctx.fill();
-
-        // Strand 2 (center)
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.48, PLAYER_HEIGHT * 0.32);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.43, PLAYER_WIDTH * 0.52, PLAYER_HEIGHT * 0.42);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.55, PLAYER_HEIGHT * 0.40, PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.32);
-        ctx.closePath();
-        ctx.fill();
-
-        // Strand 3 (right)
-        ctx.beginPath();
-        ctx.moveTo(PLAYER_WIDTH * 0.56, PLAYER_HEIGHT * 0.3);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.58, PLAYER_HEIGHT * 0.4, PLAYER_WIDTH * 0.58, PLAYER_HEIGHT * 0.42);
-        ctx.quadraticCurveTo(PLAYER_WIDTH * 0.55, PLAYER_HEIGHT * 0.38, PLAYER_WIDTH * 0.54, PLAYER_HEIGHT * 0.3);
-        ctx.closePath();
-        ctx.fill();
-
-        canvas.refresh();
-    }
-
-    // update(time: number, delta: number): void {
-    // Movement and other updates will be handled by PredictionSystem or game scene
-    // }
 } 

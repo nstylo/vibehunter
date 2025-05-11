@@ -21,6 +21,11 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     public shootCooldown = 500;
     public lastShotTime = 0;
 
+    // Wobble animation properties
+    protected wobbleAngleMagnitude = 3; // Max angle in degrees for wobble
+    protected wobbleAngleSpeed = 0.015; // Speed of wobble oscillation (radians per ms)
+    private wobbleAngleAccumulator = 0; // Accumulator for the sine wave
+
     constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string, entityId: string, hp: number, maxHp: number, maxSpeed: number) {
         super(scene, x, y, textureKey);
         this.entityId = entityId;
@@ -159,8 +164,57 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     // Phaser sprites don't have a 'postUpdate' by default in the same way components might.
     // We'll rely on calling updateHealthBar explicitly for now when position changes or create a small update method.
 
+    protected updateWobble(time: number, delta: number): void {
+        if (!this.body || !this.active) {
+            // If not active or no body, smoothly return angle to 0 if it's not already there
+            if (Math.abs(this.angle) > 0.1) {
+                this.angle = Phaser.Math.Linear(this.angle, 0, 0.2); // Adjust 0.2 for smoothness
+                if (Math.abs(this.angle) < 0.5) { // Snap to 0 if very close
+                    this.angle = 0;
+                }
+            } else if (this.angle !== 0) { // If it's already small but not zero, snap it.
+                this.angle = 0;
+            }
+            return;
+        }
+
+        const arcadeBody = this.body as Phaser.Physics.Arcade.Body;
+        // Ensure velocity exists on the body (it should for Arcade.Body)
+        if (!arcadeBody.velocity) {
+            if (Math.abs(this.angle) > 0.1) {
+                 this.angle = Phaser.Math.Linear(this.angle, 0, 0.2);
+                 if (Math.abs(this.angle) < 0.5) this.angle = 0;
+            } else if (this.angle !== 0) {
+                this.angle = 0;
+            }
+            return;
+        }
+
+        const isCurrentlyMoving = arcadeBody.velocity.x !== 0 || arcadeBody.velocity.y !== 0;
+
+        if (isCurrentlyMoving) {
+            this.wobbleAngleAccumulator += this.wobbleAngleSpeed * delta;
+            // Optional: Keep accumulator from growing excessively large to prevent potential precision loss over extreme durations
+            if (this.wobbleAngleAccumulator > Math.PI * 20) { // Reset periodically (e.g., every 10 cycles)
+                this.wobbleAngleAccumulator -= Math.PI * 20;
+            }
+            this.angle = Math.sin(this.wobbleAngleAccumulator) * this.wobbleAngleMagnitude;
+        } else {
+            // If stopped, smoothly return angle to 0
+            if (this.angle !== 0) { // Only tween if not already at 0
+                this.angle = Phaser.Math.Linear(this.angle, 0, 0.2); // Adjust 0.2 for desired smoothness
+                // Snap to 0 if very close to prevent tiny oscillations
+                if (Math.abs(this.angle) < 0.5) { // Threshold for snapping
+                    this.angle = 0;
+                    // No need to reset wobbleAngleAccumulator here, allows smooth resume of wobble
+                }
+            }
+        }
+    }
+
     preUpdate(time: number, delta: number): void {
         super.preUpdate(time, delta);
+        this.updateWobble(time, delta); // Add wobble update
         if (this.active && this.hp > 0) {
             this.updateHealthBar();
         } else {

@@ -207,7 +207,7 @@ export class EnemySprite extends EntitySprite {
                 if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8 && distanceToPlayer <= this.rangedAttackRange * 1.5) {
                     this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
                     this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
-                } else if (distanceToPlayer > this.rangedAttackRange * 1.5) {
+                } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 1.5) {
                     this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
                     this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
                 } else {

@@ -2,42 +2,42 @@
     {
         "id": "ms_1",
         "type": "movementSpeed",
-        "name": "Running Shoes",
+        "name": "Parkour Sneakers",
         "description": "Increases movement speed by 10%.",
         "level": 1
     },
     {
         "id": "pd_1",
         "type": "projectileDamage",
-        "name": "Sharpened Arrowheads",
+        "name": "Steel-Tipped Darts",
         "description": "Increases projectile damage by 2.",
         "level": 1
     },
     {
         "id": "as_1",
         "type": "attackSpeed",
-        "name": "Quick Draw Bowstring",
+        "name": "Adrenaline Shot",
         "description": "Increases attack speed by 15% (reduces cooldown).",
         "level": 1
     },
     {
         "id": "psize_1",
         "type": "projectileSize",
-        "name": "Larger Fletching",
+        "name": "Graffiti Bomb",
         "description": "Increases projectile size by 20%.",
         "level": 1
     },
     {
         "id": "def_1",
         "type": "defense",
-        "name": "Leather Tunic",
+        "name": "Kevlar Vest",
         "description": "Increases defense by 1.",
         "level": 1
     },
     {
         "id": "pspeed_1",
         "type": "projectileSpeed",
-        "name": "Aerodynamic Shafts",
+        "name": "High-Velocity Paintball",
         "description": "Increases projectile speed by 15%.",
         "level": 1
     }

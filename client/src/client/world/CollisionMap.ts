@@ -29,9 +29,13 @@ export class CollisionMap {
             if (row) { // Explicitly check if the row itself exists
                 for (let x = 0; x < this.mapWidth; x++) {
                     const cell = row[x];
-                    if (cell === CellType.SOLID) { // cell should be CellType or undefined
+                    // Define which cell types are considered solid for collision
+                    if (cell === CellType.SOLID || 
+                        cell === CellType.BUILDING_RUIN || 
+                        cell === CellType.FENCE) {
                         this.setSolid(x, y, true);
                     }
+                    // Other types like ASPHALT_ROAD, CRACKED_ASPHALT, TRASH, EMPTY_GROUND, ROUGH are not solid by default.
                 }
             }
         }

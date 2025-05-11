@@ -8,7 +8,7 @@ import { EnemySprite } from '../objects/EnemySprite'; // Import EnemySprite
 import ProjectileSprite, { ProjectileType } from '../objects/ProjectileSprite'; // Import ProjectileSprite and its enum
 import type { EntitySprite } from '../objects/EntitySprite'; // Changed to type-only import
 import { EnemySpawner, type WaveDefinition } from '../systems/EnemySpawner'; // Updated import
-import NetworkSystem from '../systems/NetworkSystem'; // Import NetworkSystem
+import NetworkSystem from '../systems/NetworkSystem';
 import {
     EVENT_ENTITY_SHOOT_PROJECTILE,
     EVENT_PROJECTILE_SPAWNED,
@@ -303,21 +303,44 @@ export class GameScene extends Phaser.Scene {
         direction: Phaser.Math.Vector2,
         targetPosition?: Phaser.Math.Vector2
     }): void {
-        const { shooter, ownerId, projectileType, direction, targetPosition } = payload;
+        const { shooter, ownerId, projectileType, direction } = payload; // targetPosition not directly used for spawn point
 
         // Determine projectile type from string
         const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
 
+        let spawnOffsetMagnitude: number;
+        let projectileScale: number | undefined = undefined;
+
+        if (shooter instanceof PlayerSprite) {
+            // Player's physics body: width 32 (half 16), height 64 (half 32).
+            // Spawn offset should be slightly larger than the max half-dimension.
+            // Math.max(32 / 2, 64 / 2) + 5 = Math.max(16, 32) + 5 = 32 + 5 = 37.
+            spawnOffsetMagnitude = 37;
+            projectileScale = shooter.getProjectileScale();
+        } else if (shooter instanceof EnemySprite) {
+            // Enemies use definition.width/height for their body size.
+            // Use the larger of their half-dimensions + a buffer.
+            const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
+            const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
+            spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
+            // projectileScale remains undefined for enemies
+        } else {
+            // Fallback for any other EntitySprite type (e.g. if we add other shootable entities)
+            const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
+            const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
+            spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
+        }
+
         const projectile = new ProjectileSprite(
             this,
-            shooter.x + direction.x * (shooter.width / 2 + 10), // Spawn slightly in front
-            shooter.y + direction.y * (shooter.height / 2 + 10),
+            shooter.x + direction.x * spawnOffsetMagnitude,
+            shooter.y + direction.y * spawnOffsetMagnitude, // Use the same magnitude for y offset based on direction
             pType,
             ownerId,
             shooter.projectileDamage, // Use damage from shooter
             shooter.projectileSpeed,  // Use speed from shooter
             shooter.projectileLifespan, // Use lifespan from shooter
-            undefined, // Scale (optional, could be from shooter too)
+            projectileScale, // Pass scale
             this.particleSystem // Pass particle system
         );
 

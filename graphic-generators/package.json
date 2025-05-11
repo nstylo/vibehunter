@@ -1,0 +1,16 @@
+{
+  "name": "graphic-generators",
+  "version": "1.0.0",
+  "description": "Generators for game graphics",
+  "module": "map-generator.ts",
+  "type": "module",
+  "scripts": {
+    "generate-map": "bun run map-generator.ts"
+  },
+  "dependencies": {
+    "sharp": "^0.34.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.11"
+  }
+}

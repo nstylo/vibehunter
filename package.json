@@ -1,16 +1,16 @@
 {
-  "name": "vibehunter",
+  "name": "graphic-generators",
   "version": "1.0.0",
-  "description": "2D survival game with procedural map generation",
+  "description": "Generators for game graphics",
+  "module": "map-generator.ts",
+  "type": "module",
   "scripts": {
-    "extract-sprites": "bun run scripts/extract-sprites.ts"
+    "generate-map": "bun run map-generator.ts"
   },
   "dependencies": {
-    "sharp": "^0.33.2",
-    "pngjs": "^7.0.0"
+    "sharp": "latest"
   },
   "devDependencies": {
-    "@types/pngjs": "^6.0.3",
-    "typescript": "^5.3.3"
+    "@types/node": "^18.15.11"
   }
-} 
+}

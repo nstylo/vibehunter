@@ -220,7 +220,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Collision between enemies themselves (to prevent clumping)
-        this.physics.add.collider(this.enemies, this.enemies);
+        this.physics.add.collider(this.enemies, this.enemies, this.handleEnemyCollideEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
 
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
@@ -863,5 +863,45 @@ export class GameScene extends Phaser.Scene {
         
         // Refresh the texture
         canvasTexture.refresh();
+    }
+
+    // Add a new method to handle enemy-enemy collision with separation logic
+    private handleEnemyCollideEnemy(enemy1: Phaser.GameObjects.GameObject, enemy2: Phaser.GameObjects.GameObject): void {
+        // Dynamic force adjustment to separate overlapping enemies
+        if (enemy1 instanceof EnemySprite && enemy2 instanceof EnemySprite) {
+            // Skip collision processing if either enemy is inactive or fleeing
+            if (!enemy1.active || !enemy2.active || enemy1.isFleeing || enemy2.isFleeing) {
+                return;
+            }
+            
+            // Calculate vector between enemies
+            const dx = enemy2.x - enemy1.x;
+            const dy = enemy2.y - enemy1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Skip if they're too far apart (shouldn't happen with collision)
+            if (distance <= 0) return;
+            
+            // Normalize direction vector
+            const nx = dx / distance;
+            const ny = dy / distance;
+            
+            // Calculate separation force based on overlap
+            const minSeparation = (enemy1.displayWidth + enemy2.displayWidth) / 3;
+            if (distance < minSeparation) {
+                const separationForce = (minSeparation - distance) * 8; // Adjust multiplier for stronger effect
+                
+                // Apply opposing forces to separate them
+                if (enemy1.body instanceof Phaser.Physics.Arcade.Body) {
+                    enemy1.body.velocity.x -= nx * separationForce;
+                    enemy1.body.velocity.y -= ny * separationForce;
+                }
+                
+                if (enemy2.body instanceof Phaser.Physics.Arcade.Body) {
+                    enemy2.body.velocity.x += nx * separationForce;
+                    enemy2.body.velocity.y += ny * separationForce;
+                }
+            }
+        }
     }
 } 

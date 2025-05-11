@@ -5,8 +5,6 @@ import { BaseBehavior } from './BaseBehavior';
 
 export class ChaseTargetBehavior extends BaseBehavior {
     public readonly id = BehaviorState.CHASING;
-    // Remove hardcoded lose sight distance, will use enemy's sightRange
-    // private loseSightDistance = 450; // Distance at which the enemy might lose sight and return to IDLE or PATROLLING
 
     enter(enemy: EnemySprite, target?: PlayerSprite): void {
         // console.log(`${enemy.enemyType} entering CHASING state towards ${target?.entityId}`);

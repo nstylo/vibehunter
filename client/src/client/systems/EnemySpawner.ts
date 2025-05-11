@@ -106,7 +106,13 @@ export class EnemySpawner {
                          // Stop spawning if wave ended prematurely or player is inactive
                         return;
                     }
-                    this.spawnSingleEnemy(group.enemyType);
+                    // Add a small offset for each enemy in a group to prevent immediate overlap when spawning
+                    const offsetAngle = Math.random() * Math.PI * 2;
+                    const offsetDistance = Math.random() * 30 + 20; // 20-50px spacing
+                    const offsetX = Math.cos(offsetAngle) * offsetDistance;
+                    const offsetY = Math.sin(offsetAngle) * offsetDistance;
+                    
+                    this.spawnSingleEnemy(group.enemyType, offsetX, offsetY);
                     this.enemiesSpawnedInCurrentWave++;
                     this.enemiesAliveInCurrentWave++;
                      // console.log(`EnemySpawner: Spawned ${group.enemyType}. Total spawned in wave: ${this.enemiesSpawnedInCurrentWave}/${this.enemiesToSpawnInCurrentWave}. Alive: ${this.enemiesAliveInCurrentWave}`);
@@ -117,7 +123,7 @@ export class EnemySpawner {
          // console.log(`EnemySpawner: Scheduled ${this.waveSpawnTimers.length} individual enemy spawns for wave ${waveDef.waveNumber}.`);
     }
     
-    private spawnSingleEnemy(enemyType: string): void {
+    private spawnSingleEnemy(enemyType: string, offsetX: number = 0, offsetY: number = 0): void {
         if (!this.player.active) {
             // console.log('EnemySpawner: Player not active, skipping single enemy spawn.');
             return;
@@ -147,6 +153,10 @@ export class EnemySpawner {
             spawnX = this.player.x + (Math.random() - 0.5) * gameWidth;
             spawnY = this.player.y + halfH + buffer;
         }
+        
+        // Apply the provided offsets to the spawn position
+        spawnX += offsetX;
+        spawnY += offsetY;
         
         const enemyId = Phaser.Utils.String.UUID();
 

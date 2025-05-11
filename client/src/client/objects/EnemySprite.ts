@@ -63,6 +63,16 @@ export class EnemySprite extends EntitySprite {
             this.baseStats.xpValue = 1;
             // EntitySprite constructor sets defaults for projectileDamage, projectileSpeed which are fine for non-ranged fallback.
 
+            // Apply physics body properties for better collision handling even in fallback case
+            if (this.body instanceof Phaser.Physics.Arcade.Body) {
+                this.body.setBounce(0.1);
+                this.body.setCollideWorldBounds(true);
+                this.body.setFriction(0.5, 0.5);
+                this.body.useDamping = true;
+                this.body.setDrag(0.2);
+                this.body.setMass(1.5);
+            }
+
             // Fallback ranges (not stats, but configuration)
             this.meleeAttackRange = 30;
             this.rangedAttackRange = null;
@@ -101,6 +111,13 @@ export class EnemySprite extends EntitySprite {
 
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
             this.body.setSize(definition.width, definition.height);
+            // Enhanced physics body configuration for better collisions
+            this.body.setBounce(0.1);
+            this.body.setCollideWorldBounds(true);
+            this.body.setFriction(0.5, 0.5);
+            this.body.useDamping = true;
+            this.body.setDrag(0.2);
+            this.body.setMass(1.5); // Slightly heavier to resist being pushed easily
         }
         this.playerPhysicsHeight = definition.height;
 

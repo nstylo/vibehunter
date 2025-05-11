@@ -6,22 +6,38 @@ import type ProjectileSprite from './ProjectileSprite'; // Import the class for 
 import type { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import enemy definitions
 
+import { StateMachine } from '../systems/StateMachine';
+import type { IBehavior } from '../interfaces/IBehavior';
+import { BehaviorState } from '../interfaces/IBehavior';
+import { IdleBehavior } from '../behaviors/IdleBehavior';
+import { ChaseTargetBehavior } from '../behaviors/ChaseTargetBehavior';
+import { AttackingMeleeBehavior } from '../behaviors/AttackingMeleeBehavior';
+import { AttackingRangedBehavior } from '../behaviors/AttackingRangedBehavior';
+import { FleeBehavior } from '../behaviors/FleeBehavior'; // Added import
+
 const ENEMY_SPRITE_KEYS: string[] = [];
 for (let i = 1; i <= 36; i++) {
     ENEMY_SPRITE_KEYS.push(`enemy_${i}`);
 }
 
 export class EnemySprite extends EntitySprite {
-    private targetPlayer: PlayerSprite | null = null;
+    public targetPlayer: PlayerSprite | null = null; // Made public for behaviors
     private lastMeleeAttackTime = 0;
     public enemyType: string; // e.g., 'patrol_cop', 'security_guard', etc.
     public isRanged = false; // Initialized to false
-    public xpValue = 10;
-    private shootingTimer: Phaser.Time.TimerEvent | null = null;
+    public meleeAttackRange: number;
+    public rangedAttackRange: number | null;
+    public sightRange: number; // Added for behavior decisions
 
-    private meleeAttackDamage: number;
-    private meleeAttackRange: number;
-    private rangedAttackRange: number | null;
+    public isFleeing = false; // Added for flee behavior state
+
+    private shootingTimer: Phaser.Time.TimerEvent | null = null;
+    public behaviorStateMachine: StateMachine<EnemySprite, IBehavior>; // Made public
+
+    // State for scam_charity_picker fleeing behavior
+    // This will likely be managed by a FleeBehavior or similar state logic
+    // public isFleeing = false; 
+    // public fleeEndTime = 0;
 
     constructor(
         scene: Phaser.Scene, 
@@ -36,123 +52,172 @@ export class EnemySprite extends EntitySprite {
         
         if (!definition) {
             console.error(`EnemySprite: No definition found for enemyType: ${enemyType}. Using fallback texture.`);
-            super(scene, x, y, 'default_missing_texture', enemyId, 10, 10, 50, particleSystem);
+            // Call new EntitySprite constructor: initialMaxHp, initialMaxSpeed, initialDefense
+            super(scene, x, y, 'default_missing_texture', enemyId, 10, 50, 0, particleSystem);
             this.enemyType = enemyType;
             this.targetPlayer = targetPlayer;
-            this.meleeAttackDamage = 5;
+            
+            // Set fallback baseStats for this specific non-definition case
+            this.baseStats.meleeDamage = 5;
+            this.baseStats.attackCooldown = 2000;
+            this.baseStats.xpValue = 1;
+            // EntitySprite constructor sets defaults for projectileDamage, projectileSpeed which are fine for non-ranged fallback.
+
+            // Fallback ranges (not stats, but configuration)
             this.meleeAttackRange = 30;
             this.rangedAttackRange = null;
-            this.xpValue = 1;
-            this.shootCooldown = 2000;
+            this.sightRange = 200;
+            this.isRanged = false; // Ensure isRanged is false for this fallback
+
+            this.behaviorStateMachine = new StateMachine<EnemySprite, IBehavior>(this);
+            this.behaviorStateMachine.addState(BehaviorState.IDLE, new IdleBehavior());
+            this.behaviorStateMachine.addState(BehaviorState.CHASING, new ChaseTargetBehavior()); 
+            this.behaviorStateMachine.addState(BehaviorState.ATTACKING_MELEE, new AttackingMeleeBehavior());
+            this.behaviorStateMachine.addState(BehaviorState.FLEEING, new FleeBehavior()); // Added FleeBehavior
+            this.behaviorStateMachine.setState(BehaviorState.IDLE, this.targetPlayer);
+            this.recalculateStats(); // Recalculate after setting base stats
             return; 
         }
 
-        const textureKey = definition.assetUrl; // This is now the ID string, e.g., "1"
+        // Definition exists, proceed with it.
+        // Call new EntitySprite constructor: initialMaxHp, initialMaxSpeed, initialDefense
+        super(scene, x, y, definition.assetUrl || 'default_missing_texture', enemyId, 
+              definition.defaultHp, definition.defaultMaxSpeed, definition.defense ?? 0, particleSystem);
 
-        if (!textureKey) {
-            console.error(`EnemySprite: No assetUrl (textureKey) found for enemyType: ${enemyType}. Using fallback texture.`);
-            super(scene, x, y, 'default_missing_texture', enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
-            this.enemyType = enemyType;
-            this.targetPlayer = targetPlayer;
-            this.xpValue = definition.xpValue;
-            this.meleeAttackDamage = definition.meleeAttackDamage;
-            this.meleeAttackRange = definition.meleeAttackRange;
-            this.rangedAttackRange = definition.isRanged ? definition.rangedAttackRange : null;
-            this.shootCooldown = definition.attackCooldown;
-            if (this.body instanceof Phaser.Physics.Arcade.Body) {
-                this.body.setSize(definition.width, definition.height);
-            }
-            return;
-        }
-
-        if (!scene.textures.exists(textureKey)) {
-            console.warn(`EnemySprite: Texture key '${textureKey}' not loaded for enemyType '${enemyType}'. Check GameScene preload. Using fallback texture.`);
-            super(scene, x, y, 'default_missing_texture', enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
-        } else {
-            super(scene, x, y, textureKey, enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
-        }
-        
         this.enemyType = enemyType;
         this.targetPlayer = targetPlayer;
-        this.xpValue = definition.xpValue;
-
-        // Set isRanged based on definition
         this.isRanged = definition.isRanged;
 
-        // Store definition-based attack properties
-        this.meleeAttackDamage = definition.meleeAttackDamage;
+        // Set baseStats from definition
+        this.baseStats.xpValue = definition.xpValue;
+        this.baseStats.meleeDamage = definition.meleeAttackDamage;
+        this.baseStats.attackCooldown = definition.attackCooldown; 
+        // EntitySprite constructor sets initial projectileDamage/Speed. Override if ranged.
+
+        // Ranges (configuration, not dynamic stats typically)
         this.meleeAttackRange = definition.meleeAttackRange;
         this.rangedAttackRange = definition.isRanged ? definition.rangedAttackRange : null;
-        this.shootCooldown = definition.attackCooldown;
+        this.sightRange = definition.sightRange ?? 300;
 
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
             this.body.setSize(definition.width, definition.height);
         }
-        this.playerPhysicsHeight = definition.height; // Set physics height from definition
+        this.playerPhysicsHeight = definition.height;
 
         if (definition.isRanged) {
-            // Convert string projectile type to enum
             if (definition.projectileType) {
                 const projectileTypeKey = definition.projectileType as keyof typeof ProjectileType;
                 if (ProjectileType[projectileTypeKey]) {
                     this.projectileType = definition.projectileType;
                 } else {
-                    console.warn(`Unknown projectile type '${definition.projectileType}' for enemy '${enemyType}', defaulting to BULLET`);
                     this.projectileType = 'BULLET';
                 }
             } else {
-                this.projectileType = 'BULLET'; // Default
+                this.projectileType = 'BULLET';
             }
             
-            // Apply enemy-specific projectile properties if needed
+            // Override default projectileDamage and projectileSpeed from EntitySprite with enemy-specific ones
+            // These are now set into baseStats
+            let specificProjectileDamage = this.baseStats.projectileDamage; // Start with default from EntitySprite
+            let specificProjectileSpeed = this.baseStats.projectileSpeed;  // Start with default
+
             switch(enemyType) {
                 case 'caffeine_rookie':
-                    this.projectileDamage = 10;
-                    this.projectileSpeed = 450; // Faster than average
+                    specificProjectileDamage = 10;
+                    specificProjectileSpeed = 450;
                     this.projectileLifespan = 2500;
                     break;
                 case 'security_guard':
-                    this.projectileDamage = 15;
-                    this.projectileSpeed = 250; // Slower but more damage
-                    this.projectileLifespan = 1000; // Shorter range
+                    specificProjectileDamage = 15;
+                    specificProjectileSpeed = 250;
+                    this.projectileLifespan = 1000;
                     break;
                 case 'janitor':
-                    this.projectileDamage = 8;
-                    this.projectileSpeed = 200; // Slow puddles
+                    specificProjectileDamage = 8;
+                    specificProjectileSpeed = 200;
                     this.projectileLifespan = 2000;
                     break;
                 case 'needle_dealer':
-                    this.projectileDamage = 12;
-                    this.projectileSpeed = 350;
+                    specificProjectileDamage = 12;
+                    specificProjectileSpeed = 350;
                     this.projectileLifespan = 1800;
                     break;
                 case 'street_arsonist':
-                    this.projectileDamage = 18;
-                    this.projectileSpeed = 300;
+                    specificProjectileDamage = 18;
+                    specificProjectileSpeed = 300;
                     this.projectileLifespan = 1200;
                     break;
                 case 'meter_maid':
-                    this.projectileDamage = 10;
-                    this.projectileSpeed = 280;
+                    specificProjectileDamage = 10;
+                    specificProjectileSpeed = 280;
                     this.projectileLifespan = 1500;
                     break;
                 case 'street_preacher':
-                    this.projectileDamage = 14;
-                    this.projectileSpeed = 240;
+                    specificProjectileDamage = 14;
+                    specificProjectileSpeed = 240;
                     this.projectileLifespan = 1200;
                     break;
                 case 'off_duty_cop':
-                    this.projectileDamage = 22;
-                    this.projectileSpeed = 500; // Very fast taser
+                    specificProjectileDamage = 22;
+                    specificProjectileSpeed = 500;
                     this.projectileLifespan = 1000;
                     break;
+                case 'community_watch':
+                    specificProjectileDamage = 8;
+                    specificProjectileSpeed = 350;
+                    this.projectileLifespan = 800;
+                    break;
+                case 'dumpster_defender':
+                    specificProjectileDamage = 16;
+                    specificProjectileSpeed = 300;
+                    this.projectileLifespan = 1200;
+                    break;
+                case 'college_kid':
+                    specificProjectileDamage = 10;
+                    specificProjectileSpeed = 280;
+                    this.projectileLifespan = 1600;
+                    break;
+                case 'street_sweeper_crew':
+                    specificProjectileDamage = 5;
+                    specificProjectileSpeed = 300;
+                    this.projectileLifespan = 1000;
+                    break;
+                case 'predatory_recruiter':
+                    specificProjectileDamage = 7;
+                    specificProjectileSpeed = 400;
+                    this.projectileLifespan = 1200;
+                    break;
+                case 'animal_control_officer':
+                    specificProjectileDamage = 10;
+                    specificProjectileSpeed = 350;
+                    this.projectileLifespan = 800;
+                    break;
+                case 'bus_shelter_heckler':
+                    specificProjectileDamage = 12;
+                    specificProjectileSpeed = 250;
+                    this.projectileLifespan = 1500;
+                    break;
                 default:
-                    // Use default values from the parent class
+                    // If not in switch, specificProjectileDamage/Speed remain EntitySprite defaults or definition based if we add those fields to JSON
+                    // For now, relies on EntitySprite defaults if not specified here.
                     break;
             }
+            this.baseStats.projectileDamage = specificProjectileDamage;
+            this.baseStats.projectileSpeed = specificProjectileSpeed;
             
             this.initAutoShooting();
         }
+
+        this.behaviorStateMachine = new StateMachine<EnemySprite, IBehavior>(this);
+        this.behaviorStateMachine.addState(BehaviorState.IDLE, new IdleBehavior());
+        this.behaviorStateMachine.addState(BehaviorState.CHASING, new ChaseTargetBehavior());
+        this.behaviorStateMachine.addState(BehaviorState.ATTACKING_MELEE, new AttackingMeleeBehavior());
+        this.behaviorStateMachine.addState(BehaviorState.FLEEING, new FleeBehavior()); // Added FleeBehavior
+        if (this.isRanged) {
+            this.behaviorStateMachine.addState(BehaviorState.ATTACKING_RANGED, new AttackingRangedBehavior());
+        }
+        this.behaviorStateMachine.setState(BehaviorState.IDLE, this.targetPlayer);
+        this.recalculateStats(); // Recalculate after all base stats are set
     }
 
     // Initialize auto-shooting system
@@ -160,8 +225,10 @@ export class EnemySprite extends EntitySprite {
         if (this.shootingTimer) {
             this.shootingTimer.destroy();
         }
+        // Use currentStats for the delay, with a fallback
+        const cooldown = this.currentStats.attackCooldown ?? 2000; 
         this.shootingTimer = this.scene.time.addEvent({
-            delay: this.shootCooldown, // Uses the current shootCooldown
+            delay: cooldown, 
             callback: this.attemptAutoShoot,
             callbackScope: this,
             loop: true
@@ -169,8 +236,14 @@ export class EnemySprite extends EntitySprite {
     }
 
     // Automatically shoot at the player
-    private attemptAutoShoot(): void {
+    public attemptAutoShoot(): void {
         if (!this.active || !this.targetPlayer?.active) return;
+
+        const currentTime = this.scene.time.now;
+        // Check if enough time has passed since the last shot
+        if (currentTime < this.lastShotTime + this.currentStats.attackCooldown) {
+            return; // Still on cooldown, can't shoot yet
+        }
 
         const distanceToPlayer = Phaser.Math.Distance.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
         
@@ -178,233 +251,54 @@ export class EnemySprite extends EntitySprite {
         if (this.rangedAttackRange && distanceToPlayer <= this.rangedAttackRange) {
             // Target player directly for ranged attack
             const targetPos = new Phaser.Math.Vector2(this.targetPlayer.x, this.targetPlayer.y);
-            this.attemptShoot(targetPos); // attemptShoot handles its own cooldown via lastShotTime
+            // Update lastShotTime before attempting to shoot
+            this.lastShotTime = currentTime;
+            this.attemptShoot(targetPos);
         }
     }
 
     update(time: number, delta: number): void {
-        if (!this.active || !this.targetPlayer?.active) {
+        if (!this.active) {
             if (this.body instanceof Phaser.Physics.Arcade.Body) {
-                this.body.setVelocity(0, 0);
+                this.body.setVelocity(0,0); // Ensure inactive enemies don't move
             }
             return;
         }
 
-        if (!this.targetPlayer) return;
+        // Update isFleeing based on current behavior state
+        this.isFleeing = this.behaviorStateMachine.currentState?.id === BehaviorState.FLEEING;
 
-        const distanceToPlayer = Phaser.Math.Distance.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
-        const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
-
-        if (this.body instanceof Phaser.Physics.Arcade.Body) {
-            // Apply enemy-specific behavior based on type
-            switch (this.enemyType) {
-                case 'caffeine_rookie':
-                    // Erratic movement, speeds up after misses
-                    if (time % 1000 < 500) {
-                        const jitterAngle = angleToPlayer + (Math.random() * 0.5 - 0.25);
-                        this.body.setVelocityX(Math.cos(jitterAngle) * this.maxSpeed * 1.2);
-                        this.body.setVelocityY(Math.sin(jitterAngle) * this.maxSpeed * 1.2);
-                    } else {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
-                    }
-                    break;
-                    
-                case 'tax_man':
-                    // Moves slower but deals more damage
-                    if (distanceToPlayer > this.meleeAttackRange) {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.8);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.8);
-                    } else {
-                        this.body.setVelocity(0, 0);
-                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                            this.performMeleeAttack();
-                            this.lastMeleeAttackTime = time;
-                        }
-                    }
-                    break;
-                    
-                case 'repo_agent':
-                    // Tries to hook player and drag them
-                    if (distanceToPlayer > this.meleeAttackRange * 1.5) {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.1);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.1);
-                    } else if (distanceToPlayer > this.meleeAttackRange) {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.5);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.5);
-                    } else {
-                        this.body.setVelocity(0, 0);
-                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                            this.performMeleeAttack();
-                            this.lastMeleeAttackTime = time;
-                        }
-                    }
-                    break;
-                    
-                case 'guard_dog':
-                    // Very fast movement
-                    if (distanceToPlayer > this.meleeAttackRange) {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.3);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.3);
-                    } else {
-                        this.body.setVelocity(0, 0);
-                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                            this.performMeleeAttack();
-                            this.lastMeleeAttackTime = time;
-                        }
-                    }
-                    break;
-                    
-                case 'bouncer':
-                    // Slow but powerful
-                    if (distanceToPlayer > this.meleeAttackRange * 1.2) {
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
-                    } else {
-                        this.body.setVelocity(0, 0);
-                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                            this.performMeleeAttack();
-                            this.lastMeleeAttackTime = time;
-                        }
-                    }
-                    break;
-                    
-                case 'court_runner':
-                    // Very fast, tries to tag player and then runs away briefly
-                    if (distanceToPlayer > this.meleeAttackRange) {
-                        // Run toward player at high speed
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.4);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.4);
-                    } else {
-                        // After attack, run away briefly
-                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                            this.performMeleeAttack();
-                            this.lastMeleeAttackTime = time;
-                            
-                            // Run away after attacking
-                            this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed);
-                            this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed);
-                        } else {
-                            // Stay still briefly after attack
-                            this.body.setVelocity(0, 0);
-                        }
-                    }
-                    break;
-                    
-                case 'meter_maid':
-                    // Keeps medium distance and shoots tickets
-                    if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.6) {
-                        // Too close, back away
-                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed * 0.8);
-                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed * 0.8);
-                    } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.9) {
-                        // Too far, approach
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.6);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.6);
-                    } else {
-                        // In ideal range, stay still to shoot
-                        this.body.setVelocity(0, 0);
-                    }
-                    break;
-                    
-                case 'street_preacher':
-                    // Slow but long range shouts
-                    if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.5) {
-                        // Too close, back away
-                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed * 0.9);
-                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed * 0.9);
-                    } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.9) {
-                        // Too far, approach
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
-                    } else {
-                        // In ideal range, stay still to shoot
-                        this.body.setVelocity(0, 0);
-                    }
-                    break;
-                    
-                case 'off_duty_cop':
-                    // Strategic movement, maintains medium distance
-                    if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8) {
-                        // Approach at medium speed
-                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.9);
-                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.9);
-                    } else if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.3) {
-                        // Too close, back away quickly
-                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed);
-                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed);
-                    } else {
-                        // Strafe sideways for harder-to-hit target
-                        const strafeAngle = angleToPlayer + Math.PI / 2;
-                        if (time % 4000 < 2000) {
-                            this.body.setVelocityX(Math.cos(strafeAngle) * this.maxSpeed * 0.6);
-                            this.body.setVelocityY(Math.sin(strafeAngle) * this.maxSpeed * 0.6);
-                        } else {
-                            this.body.setVelocityX(Math.cos(strafeAngle) * this.maxSpeed * -0.6);
-                            this.body.setVelocityY(Math.sin(strafeAngle) * this.maxSpeed * -0.6);
-                        }
-                    }
-                    break;
-                    
-                default:
-                    // Default behavior for other enemies
-                    if (this.isRanged) {
-                        // Ranged enemy behavior
-                        if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8 && distanceToPlayer <= this.rangedAttackRange * 1.5) {
-                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
-                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
-                        } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 1.5) {
-                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
-                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
-                        } else {
-                            this.body.setVelocity(0, 0);
-                        }
-                    } else {
-                        // Melee enemy behavior (original logic)
-                        if (distanceToPlayer > this.meleeAttackRange) {
-                            // Move towards player
-                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
-                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
-                        } else {
-                            // Close enough to attack (melee)
-                            this.body.setVelocity(0, 0); // Stop moving
-                            // Use separate melee attack timer
-                            if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                                this.performMeleeAttack();
-                                this.lastMeleeAttackTime = time;
-                            }
-                        }
-                    }
-            }
-        }
-
-        // Flip sprite based on player position
-        if (this.targetPlayer.x < this.x) {
-            this.setFlipX(true);
-        } else {
-            this.setFlipX(false);
-        }
+        // targetPlayer is passed to the behavior's update method
+        this.behaviorStateMachine.update(time, delta, this.targetPlayer);
     }
 
-    private performMeleeAttack(): void {
+    public performMeleeAttack(): void {
         if (this.targetPlayer?.active) {
-            this.targetPlayer.takeDamage(this.meleeAttackDamage, this);
+            const currentTime = this.scene.time.now;
+            // Use currentStats for cooldown and damage, with fallbacks
+            const attackCooldown = this.currentStats.attackCooldown ?? 1000;
+            const meleeDamage = this.currentStats.meleeDamage ?? 5;
+
+            if (currentTime > this.lastMeleeAttackTime + attackCooldown) { 
+                this.targetPlayer.takeDamage(meleeDamage, this);
+                this.lastMeleeAttackTime = currentTime; 
+            }
         }
     }
 
     // Override the die method from EntitySprite
     protected override die(killer?: EntitySprite | ProjectileSprite | string): void {
+        // Clean up shooting timer
+        if (this.shootingTimer) {
+            this.shootingTimer.destroy();
+            this.shootingTimer = null;
+        }
+        
         // Play enemy death particle effect
         if (this.particleSystem) {
             this.particleSystem.playEnemyDeath(this.x, this.y);
         }
         
-        // Clean up resources when destroyed
-        if (this.shootingTimer) {
-            this.shootingTimer.destroy();
-            this.shootingTimer = null;
-        }
-
         super.die(killer);
     }
     

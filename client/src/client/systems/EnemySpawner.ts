@@ -95,10 +95,8 @@ export class EnemySpawner {
     }
 
     private spawnWaveEnemies(waveDef: WaveDefinition): void {
-        let cumulativeDelay = 0;
-
         for (const group of waveDef.enemyGroups) {
-            const groupSpawnDelay = cumulativeDelay + (group.spawnDelay || 0);
+            const groupSpawnDelay = group.spawnDelay || 0;
             
             for (let i = 0; i < group.count; i++) {
                 const individualSpawnTime = groupSpawnDelay + (i * (group.spawnInterval || 500)); // Default 500ms interval if not specified
@@ -115,9 +113,6 @@ export class EnemySpawner {
                 });
                 this.waveSpawnTimers.push(timer);
             }
-            // Estimate time for this group to finish spawning for the next group's cumulativeDelay
-            // This is a rough estimate; more precise chaining could be done if needed.
-            cumulativeDelay = groupSpawnDelay + (group.count * (group.spawnInterval || 500));
         }
          // console.log(`EnemySpawner: Scheduled ${this.waveSpawnTimers.length} individual enemy spawns for wave ${waveDef.waveNumber}.`);
     }
@@ -173,6 +168,9 @@ export class EnemySpawner {
 
         this.enemiesAliveInCurrentWave--;
         this.enemiesKilledInCurrentWave++;
+        
+        // Emit event for enemy removal (for HUD indicators)
+        this.scene.game.events.emit('enemyRemoved', { enemyId: enemy.entityId });
         
         // Emit event for UI update (enemies remaining)
         this.scene.events.emit('enemyDefeatedInWave', { 

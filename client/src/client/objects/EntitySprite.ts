@@ -6,20 +6,51 @@ import {
 } from '../../common/events';
 import type ProjectileSprite from './ProjectileSprite';
 import type { ParticleSystem } from '../systems/ParticleSystem';
+import type { IStatusEffect, IStatusEffectData } from '../interfaces/IStatusEffect';
+import statusEffectFactory from '../systems/StatusEffectFactory'; // Import the factory
+
+// Extend the interface to include runtime properties
+interface IStatusEffectRuntime extends IStatusEffect {
+    appliedAt?: number;
+    _lastTickTime?: number;
+}
 
 export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     public entityId: string;
-    public hp: number;
-    public maxHp: number;
-    public maxSpeed: number;
-    public defense: number; // Added defense property
-    protected healthBarGraphics: Phaser.GameObjects.Graphics;
+    // Removed standalone stat variables: hp, maxHp, maxSpeed, defense
+
+    // Stats Management
+    public baseStats: { 
+        hp: number;
+        maxHp: number;
+        maxSpeed: number;
+        defense: number;
+        attackCooldown: number;
+        projectileDamage: number;
+        projectileSpeed: number;
+        [key: string]: number; // Allow other string-keyed stats
+    };
+    public currentStats: {
+        hp: number;
+        maxHp: number;
+        maxSpeed: number;
+        defense: number;
+        attackCooldown: number;
+        projectileDamage: number;
+        projectileSpeed: number;
+        [key: string]: number;
+    };
+
+    // Status Effects Management
+    public activeStatusEffects = new Map<string, IStatusEffectRuntime>();
+
+    protected healthBarGraphics;
+    private healthBarVisible = false;
+    private healthBarHideTimer: Phaser.Time.TimerEvent | null = null;
+    private healthBarHideDelay = 5000; // 5 seconds before hiding the health bar
 
     public projectileType = 'BULLET';
-    public projectileDamage = 10;
-    public projectileSpeed = 300;
     public projectileLifespan = 1000;
-    public shootCooldown = 500;
     public lastShotTime = 0;
 
     // Wobble animation properties
@@ -35,16 +66,26 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     // Constant for player physics height to be accessible
     protected playerPhysicsHeight = 64; // Default, can be overridden if necessary or passed
 
-    constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string, entityId: string, hp: number, maxHp: number, maxSpeed: number, particleSystem?: ParticleSystem) {
+    constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string, entityId: string, initialMaxHp: number, initialMaxSpeed: number, initialDefense = 0, particleSystem?: ParticleSystem) {
         super(scene, x, y, textureKey);
         this.entityId = entityId;
-        this.hp = hp;
-        this.maxHp = maxHp;
-        this.maxSpeed = maxSpeed;
-        this.defense = 0; // Default defense to 0
-        this.particleSystem = particleSystem; // Assign particle system
+
+        this.baseStats = {
+            maxHp: initialMaxHp,
+            hp: initialMaxHp, // Current HP initialized to maxHP
+            maxSpeed: initialMaxSpeed,
+            defense: initialDefense,
+            attackCooldown: 500,      // Default, can be overridden by subclasses
+            projectileDamage: 10,     // Default
+            projectileSpeed: 300,     // Default
+        };
+        this.currentStats = { ...this.baseStats };
+        
+        this.particleSystem = particleSystem;
 
         this.healthBarGraphics = scene.add.graphics();
+        // Initially hide health bar until damage is taken
+        this.healthBarGraphics.visible = false;
         this.updateHealthBar();
 
         scene.add.existing(this);
@@ -60,24 +101,48 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     // Abstract method for texture generation, to be implemented by subclasses
     // static abstract generateTexture(scene: Phaser.Scene, key: string, ...args: any[]): void;
 
+    // Show health bar and reset the hide timer
+    private showHealthBar(): void {
+        if (!this.healthBarVisible) {
+            this.healthBarGraphics.visible = true;
+            this.healthBarVisible = true;
+        }
+        
+        // Reset or create the timer to hide the health bar
+        if (this.healthBarHideTimer) {
+            this.healthBarHideTimer.reset({ delay: this.healthBarHideDelay });
+        } else {
+            this.healthBarHideTimer = this.scene.time.delayedCall(this.healthBarHideDelay, () => {
+                if (this.active && this.healthBarGraphics) {
+                    this.healthBarGraphics.visible = false;
+                    this.healthBarVisible = false;
+                }
+            });
+        }
+    }
+
     // Common methods can be added here, e.g.:
     public takeDamage(amount: number, source?: EntitySprite | ProjectileSprite | string): void {
-        const damageAfterDefense = Math.max(1, amount - this.defense); // Ensure at least 1 damage if amount > 0
-        const actualDamage = Math.min(this.hp, damageAfterDefense);
-        this.hp -= actualDamage;
+        // New minimum damage calculation: minimum 10% of original damage (prevents defense from completely nullifying damage)
+        // Also ensures damage is at least 1
+        const damageAfterDefense = Math.max(Math.ceil(amount * 0.1), amount - (this.currentStats.defense || 0));
+        const actualDamage = Math.min(this.currentStats.hp, damageAfterDefense);
+        this.currentStats.hp -= actualDamage;
+
+        // Show health bar when damage is taken
+        this.showHealthBar();
 
         this.displayDamageNumber(actualDamage);
 
-        // Emit take damage event AFTER health is updated
         this.scene.events.emit(EVENT_ENTITY_TAKE_DAMAGE, {
             target: this,
             damage: actualDamage,
-            newHp: this.hp,
+            newHp: this.currentStats.hp,
             source: source
         });
 
-        if (this.hp <= 0) {
-            this.hp = 0;
+        if (this.currentStats.hp <= 0) {
+            this.currentStats.hp = 0;
             this.die(source);
         } else {
             this.updateHealthBar();
@@ -98,6 +163,11 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     protected die(killer?: EntitySprite | ProjectileSprite | string): void {
+        if (this.healthBarHideTimer) {
+            this.healthBarHideTimer.remove();
+            this.healthBarHideTimer = null;
+        }
+        
         this.healthBarGraphics.destroy();
 
         // Emit died event before deactivating/destroying
@@ -116,23 +186,53 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     // }
 
     // Method to update the health bar's appearance
-    private updateHealthBar(): void {
+    protected updateHealthBar(): void {
         this.healthBarGraphics.clear();
-        if (!this.active || this.hp <= 0) return;
+        if (!this.active || !this.currentStats || this.currentStats.hp <= 0) return;
 
         const barWidth = this.width * 0.8;
         const barHeight = 8;
         const barX = this.x - barWidth / 2;
-        const barY = this.y - this.height / 2 - barHeight - 5; 
+        const barY = this.y - this.height / 2 - barHeight - 5;
 
         this.healthBarGraphics.fillStyle(0x808080, 0.7);
         this.healthBarGraphics.fillRect(barX, barY, barWidth, barHeight);
 
-        const healthPercentage = this.hp / this.maxHp;
+        const healthPercentage = this.currentStats.hp / this.currentStats.maxHp;
         const currentHealthWidth = barWidth * healthPercentage;
         this.healthBarGraphics.fillStyle(0x00ff00, 0.9);
         this.healthBarGraphics.fillRect(barX, barY, currentHealthWidth, barHeight);
 
+        this.healthBarGraphics.lineStyle(1, 0x000000, 0.8);
+        this.healthBarGraphics.strokeRect(barX, barY, barWidth, barHeight);
+    }
+
+    // Add method to update health bar position without redrawing
+    protected updateHealthBarPosition(): void {
+        if (!this.active || !this.currentStats || this.currentStats.hp <= 0) {
+            this.healthBarGraphics.clear();
+            return;
+        }
+        
+        // Redraw the health bar at the updated position
+        this.healthBarGraphics.clear();
+        
+        const barWidth = this.width * 0.8;
+        const barHeight = 8;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - this.height / 2 - barHeight - 5;
+        
+        // Draw background
+        this.healthBarGraphics.fillStyle(0x808080, 0.7);
+        this.healthBarGraphics.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Draw health portion
+        const healthPercentage = this.currentStats.hp / this.currentStats.maxHp;
+        const currentHealthWidth = barWidth * healthPercentage;
+        this.healthBarGraphics.fillStyle(0x00ff00, 0.9);
+        this.healthBarGraphics.fillRect(barX, barY, currentHealthWidth, barHeight);
+        
+        // Draw border
         this.healthBarGraphics.lineStyle(1, 0x000000, 0.8);
         this.healthBarGraphics.strokeRect(barX, barY, barWidth, barHeight);
     }
@@ -200,7 +300,10 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
             return;
         }
 
-        const isCurrentlyMoving = arcadeBody.velocity.x !== 0 || arcadeBody.velocity.y !== 0;
+        // Add velocity threshold to only wobble when entity is actually moving with meaningful speed
+        const velocityThreshold = 10; // Minimum speed to trigger wobble effect
+        const velocityMagnitude = Math.sqrt(arcadeBody.velocity.x * arcadeBody.velocity.x + arcadeBody.velocity.y * arcadeBody.velocity.y);
+        const isCurrentlyMoving = velocityMagnitude > velocityThreshold;
 
         if (isCurrentlyMoving) {
             this.wobbleAngleAccumulator += this.wobbleAngleSpeed * delta;
@@ -223,51 +326,228 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     preUpdate(time: number, delta: number): void {
-        super.preUpdate(time, delta);
-        this.updateWobble(time, delta); // Add wobble update
+        const now = time;
+        const effectsToRemove: string[] = [];
 
-        // Emit footstep particles if moving
-        if (this.particleSystem && this.canEmitFootsteps && this.active && this.body) {
-            const arcadeBody = this.body as Phaser.Physics.Arcade.Body;
-            const isCurrentlyMoving = arcadeBody.velocity && (arcadeBody.velocity.x !== 0 || arcadeBody.velocity.y !== 0);
+        for (const [effectId, effect] of this.activeStatusEffects.entries()) {
+            // appliedAt is set by the factory/system when an effect instance is created and applied.
+            // It's not strictly part of IStatusEffect to keep the interface cleaner for definitions.
+            const effectAppliedTimestamp = effect.appliedAt ?? 0;
 
-            if (isCurrentlyMoving && time > this.lastFootstepTime + this.footstepEmitInterval) {
-                // Adjust Y position to be near the feet.
-                // Assuming sprite origin is 0.5, 0.5 (center) and physics body is centered.
-                // The bottom of the physics body is at this.y + this.playerPhysicsHeight / 2.
-                const footstepY = this.y + (this.playerPhysicsHeight / 2) - 5; // Small offset upwards from the very bottom of physics body
-                this.particleSystem.playFootstep(this.x, footstepY);
-                this.lastFootstepTime = time;
+            if (effect.duration !== Number.POSITIVE_INFINITY && now >= effectAppliedTimestamp + effect.duration) {
+                effectsToRemove.push(effectId);
+                continue;
+            }
+
+            if (effect.onUpdate) {
+                effect.onUpdate(this, delta); // Corrected: 2 arguments
+            }
+
+            if (effect.tickRate && effect.onTick) {
+                if (now >= (effect._lastTickTime ?? 0) + effect.tickRate) {
+                    effect.onTick(this);
+                    effect._lastTickTime = now;
+                }
             }
         }
 
-        if (this.active && this.hp > 0) {
-            this.updateHealthBar();
-        } else {
-            this.healthBarGraphics.clear();
+        // Use for...of for iterating `effectsToRemove` as per linter suggestion
+        for (const id of effectsToRemove) {
+            this.removeStatusEffect(id); // This should call onRemove and recalculateStats
+        }
+
+        this.updateWobble(time, delta);
+        this.updateHealthBarPosition(); // Update health bar position every frame
+
+        if (this.canEmitFootsteps && this.body) {
+            const arcadeBody = this.body as Phaser.Physics.Arcade.Body;
+            if (arcadeBody.velocity) {
+                // Use same velocity threshold as wobble for consistency
+                const velocityThreshold = 10;
+                const velocityMagnitude = Math.sqrt(arcadeBody.velocity.x * arcadeBody.velocity.x + arcadeBody.velocity.y * arcadeBody.velocity.y);
+                const isMovingEnoughForFootsteps = velocityMagnitude > velocityThreshold;
+                
+                if (isMovingEnoughForFootsteps && time > this.lastFootstepTime + this.footstepEmitInterval) {
+                    if (this.particleSystem) {
+                        // Assuming ParticleSystem has emitFootstep method
+                        this.particleSystem.emitFootstep(this.x, this.y + this.height / 2 - this.playerPhysicsHeight/2 + 10);
+                    }
+                    this.lastFootstepTime = time;
+                }
+            }
         }
     }
 
-    // Method to attempt shooting
     public attemptShoot(targetPosition?: Phaser.Math.Vector2, direction?: Phaser.Math.Vector2): boolean {
-        let shootDirection: Phaser.Math.Vector2;
-        if (targetPosition) {
+        let shootDirection = direction;
+        if (!shootDirection && targetPosition) {
             shootDirection = new Phaser.Math.Vector2(targetPosition.x - this.x, targetPosition.y - this.y).normalize();
-        } else if (direction) {
-            shootDirection = new Phaser.Math.Vector2(direction.x, direction.y).normalize();
-        } else {
-            const angle = this.angle;
-            const angleRad = Phaser.Math.DegToRad(angle);
-            shootDirection = new Phaser.Math.Vector2(Math.cos(angleRad), Math.sin(angleRad));
+        } else if (!shootDirection) {
+            // Default direction if none provided (e.g., facing right)
+            shootDirection = new Phaser.Math.Vector2(this.flipX ? -1 : 1, 0);
         }
 
         this.scene.events.emit(EVENT_ENTITY_SHOOT_PROJECTILE, {
             shooter: this,
-            ownerId: this.entityId,
-            projectileType: this.projectileType,
-            targetPosition: targetPosition,
-            direction: shootDirection
+            projectileType: this.projectileType, 
+            damage: this.currentStats.projectileDamage,
+            projectileSpeed: this.currentStats.projectileSpeed,
+            lifespan: this.projectileLifespan,
+            direction: shootDirection,
+            x: this.x + shootDirection.x * (this.width / 2 + 10), // Offset to shoot from edge
+            y: this.y + shootDirection.y * (this.height / 2),
         });
         return true;
+    }
+
+    public applyKnockback(direction: Phaser.Math.Vector2, force: number, durationMs?: number): void {
+        if (!this.body || !this.active) return;
+
+        const arcadeBody = this.body as Phaser.Physics.Arcade.Body;
+        
+        // Apply the initial knockback velocity
+        arcadeBody.setVelocity(direction.x * force, direction.y * force);
+
+        if (durationMs && durationMs > 0) {
+            // If a duration is provided, set a timer to revert to normal behavior
+            // or to remove a temporary state that might be overriding normal movement.
+            // For now, we can simply allow natural deceleration or subsequent AI movement to take over.
+            // A more robust system might involve a temporary 'isKnockedBack' state.
+            this.scene.time.delayedCall(durationMs, () => {
+                if (this.active && this.body) {
+                    // Optional: Could reduce velocity gradually or let AI take over.
+                    // For now, if AI doesn't set velocity each frame, this might stop it.
+                    // If AI *does* set velocity, this explicit stop might not be needed or could conflict.
+                    // A common pattern is for AI to check !isKnockedBack before applying its own movement.
+                    // For simplicity here, let's assume AI will override or we want it to stop if it was only knockback.
+                     if (arcadeBody.velocity.x === direction.x * force && arcadeBody.velocity.y === direction.y * force) {
+                        // Only stop if velocity hasn't been changed by something else
+                        // arcadeBody.setVelocity(0,0); // Or allow normal AI to resume
+                     }
+                }
+            });
+        }
+        // Visual feedback for knockback (optional)
+        // Example: a quick tint or shake
+        this.scene.tweens.add({
+            targets: this,
+            angle: this.angle + (direction.x < 0 ? 5 : -5), // Quick jolt based on direction
+            duration: 50,
+            yoyo: true,
+            ease: 'Power1'
+        });
+    }
+
+    // Status Effect Management Methods
+    public applyStatusEffect(effectIdOrData: string | IStatusEffectData, source?: EntitySprite | ProjectileSprite | string): void {
+        let effectInstance: IStatusEffect | undefined;
+        let effectIdentifier: string;
+
+        if (typeof effectIdOrData === 'string') {
+            effectIdentifier = effectIdOrData;
+            effectInstance = statusEffectFactory.createEffect(effectIdentifier, source);
+        } else {
+            // If IStatusEffectData is passed, use its id to create the effect via the factory
+            effectIdentifier = effectIdOrData.id;
+            effectInstance = statusEffectFactory.createEffect(effectIdentifier, source);
+            if (!effectInstance) {
+                // This path implies the data was passed, but the factory couldn't make an instance (e.g. type not registered)
+                console.warn(`EntitySprite: Attempted to apply effect with data for ID "${effectIdentifier}", but factory couldn't create it. Ensure type "${effectIdOrData.type}" is registered.`);
+            }
+        }
+
+        if (!effectInstance) {
+            // Ensure effectIdentifier is defined for the warning message
+            const idForWarning = typeof effectIdOrData === 'string' ? effectIdOrData : effectIdOrData.id;
+            console.warn(`EntitySprite: Could not create status effect instance for: ${idForWarning}`);
+            return;
+        }
+
+        const existingEffect = this.activeStatusEffects.get(effectInstance.id); // Use effectInstance.id as it's guaranteed by IStatusEffect
+
+        if (existingEffect) {
+            if (effectInstance.canStack && existingEffect.currentStacks !== undefined && (existingEffect.maxStacks === undefined || existingEffect.currentStacks < existingEffect.maxStacks)) {
+                existingEffect.currentStacks++;
+                existingEffect.duration = effectInstance.duration; // Refresh duration on stack
+            } else if (!effectInstance.canStack) {
+                existingEffect.duration = effectInstance.duration; // Refresh duration for non-stackable
+            } else {
+                // Max stacks reached, just refresh duration
+                existingEffect.duration = effectInstance.duration;
+            }
+            this.recalculateStats();
+            existingEffect.onApply(this); // Re-call onApply for refresh/stack logic
+        } else {
+            this.activeStatusEffects.set(effectInstance.id, effectInstance);
+            effectInstance.currentStacks = 1;
+            effectInstance.onApply(this);
+            this.recalculateStats(); 
+        }
+    }
+
+    public removeStatusEffect(effectId: string): void {
+        const effect = this.activeStatusEffects.get(effectId);
+        if (effect) {
+            effect.onRemove(this);
+            this.activeStatusEffects.delete(effectId);
+            this.recalculateStats(); // Recalculate stats after removal
+            console.log(`Removed status effect ${effectId} from ${this.entityId}`);
+        }
+    }
+
+    public hasStatusEffect(effectId: string): boolean {
+        return this.activeStatusEffects.has(effectId);
+    }
+
+    public clearAllStatusEffects(filter?: (effect: IStatusEffect) => boolean): void {
+        let statsChanged = false;
+        for (const [effectId, effect] of this.activeStatusEffects.entries()) {
+            if (!filter || filter(effect)) {
+                effect.onRemove(this);
+                this.activeStatusEffects.delete(effectId);
+                statsChanged = true;
+            }
+        }
+        if (statsChanged) {
+            this.recalculateStats(); // Recalculate stats after clearing
+        }
+        // console.log(`Cleared all status effects for ${this.entityId}`); // Already logged in removeStatusEffect if called iteratively
+    }
+
+    protected recalculateStats(): void {
+        // Reset currentStats to a copy of baseStats
+        this.currentStats = { ...this.baseStats };
+
+        // Apply modifiers from active status effects
+        for (const effect of this.activeStatusEffects.values()) {
+            if (effect.statModifiers) {
+                for (const key in effect.statModifiers) {
+                    if (Object.prototype.hasOwnProperty.call(effect.statModifiers, key) && 
+                        typeof this.currentStats[key] === 'number') {
+                        
+                        const modifier = effect.statModifiers[key];
+                        if (typeof modifier === 'object' && modifier !== null) {
+                            // Handle { add?: number, multiply?: number } format
+                            if (typeof modifier.add === 'number') {
+                                this.currentStats[key] += modifier.add;
+                            }
+                            if (typeof modifier.multiply === 'number') {
+                                this.currentStats[key] *= modifier.multiply;
+                            }
+                        } else if (typeof modifier === 'number') {
+                            // Handle direct number assignment (additive)
+                            this.currentStats[key] += modifier;
+                        }
+                    }
+                }
+            }
+        }
+        // HP specific clamping
+        if (typeof this.currentStats.maxHp === 'number') {
+            this.currentStats.hp = Math.min(this.currentStats.hp, this.currentStats.maxHp);
+        }
+        this.currentStats.hp = Math.max(0, this.currentStats.hp);
+
+        this.updateHealthBar(); 
     }
 } 

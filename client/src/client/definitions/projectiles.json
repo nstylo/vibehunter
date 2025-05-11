@@ -70,5 +70,68 @@
         "color": "0xffff00",
         "impactParticleEffect": "electricImpact",
         "impactSoundKey": "sfx_electric_hit"
+    },
+    {
+        "type": "FLASHLIGHT_BEAM",
+        "textureName": "projectile_flashlight_texture",
+        "width": 10,
+        "height": 40, 
+        "color": "0xffffee",
+        "impactParticleEffect": "flashImpact",
+        "impactSoundKey": "sfx_flash_hit"
+    },
+    {
+        "type": "LID_TOSS",
+        "textureName": "projectile_lid_texture",
+        "width": 20,
+        "height": 20,
+        "color": "0x808080",
+        "impactParticleEffect": "metalClangImpact",
+        "impactSoundKey": "sfx_lid_hit"
+    },
+    {
+        "type": "TEXTBOOK",
+        "textureName": "projectile_textbook_texture",
+        "width": 18,
+        "height": 14,
+        "color": "0x0000ff",
+        "impactParticleEffect": "paperImpact",
+        "impactSoundKey": "sfx_book_hit"
+    },
+    {
+        "type": "HOSE_SPRAY",
+        "textureName": "projectile_hosespray_texture",
+        "width": 25,
+        "height": 8,
+        "color": "0x6699ff", 
+        "impactParticleEffect": "waterSplash",
+        "impactSoundKey": "sfx_water_spray_hit"
+    },
+    {
+        "type": "TRANQUILIZER_DART",
+        "textureName": "projectile_dart_texture",
+        "width": 16,
+        "height": 4,
+        "color": "0x4b5320",
+        "impactParticleEffect": "dartImpact",
+        "impactSoundKey": "sfx_dart_hit"
+    },
+    {
+        "type": "SNARE",
+        "textureName": "projectile_snare_texture",
+        "width": 20,
+        "height": 20,
+        "color": "0x8b4513", 
+        "impactParticleEffect": "ropeHit",
+        "impactSoundKey": "sfx_snare_hit"
+    },
+    {
+        "type": "BOTTLE",
+        "textureName": "projectile_bottle_texture",
+        "width": 10,
+        "height": 18,
+        "color": "0x228B22", 
+        "impactParticleEffect": "glassShatter",
+        "impactSoundKey": "sfx_bottle_shatter"
     }
 ] 

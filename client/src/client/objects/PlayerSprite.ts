@@ -46,10 +46,6 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private shootingTimer: Phaser.Time.TimerEvent | null = null;
     private enemies: Phaser.GameObjects.GameObject[] = [];
 
-    // Stats that can be upgraded
-    private currentProjectileScale = 1.0;
-    private currentDefense = 0;
-
     // Network-related properties
     private networkSystem: NetworkSystem | null = null;
     private isNetworkControlled = false;
@@ -64,46 +60,40 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private keyD: Phaser.Input.Keyboard.Key | undefined;
 
     constructor(scene: Phaser.Scene, x: number, y: number, playerId: string, particleSystem?: ParticleSystem) {
-        // Select a random sprite key
         const randomSpriteKey = Phaser.Math.RND.pick(CHARACTER_SPRITE_KEYS);
 
-        // Initialize with default stats that will be soon updated by ProgressionSystem
         super(scene, x, y, randomSpriteKey, playerId,
-            DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
-            DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
-            DEFAULT_PLAYER_STATS.movementSpeed, // Use from DEFAULT_PLAYER_STATS
-            particleSystem // Pass particle system to base class
+            DEFAULT_PLAYER_STATS.maxHealth, 
+            DEFAULT_PLAYER_STATS.movementSpeed, 
+            DEFAULT_PLAYER_STATS.defense, // Pass defense to EntitySprite constructor
+            particleSystem 
             );
-        this.playerId = playerId; // entityId from EntitySprite is already set to playerId by super call
-        this.dashCooldown = 0; // Default dash cooldown
-        this.accelerationFactor = 0.1; // Default acceleration factor
-        this.decelerationFactor = 0.1; // Default deceleration factor, can be tuned
-        // this.remoteStateRef = {}; // Initialize appropriately
+        this.playerId = playerId; 
+        this.dashCooldown = 0; 
+        this.accelerationFactor = 0.1; 
+        this.decelerationFactor = 0.1; 
 
-        // Set the physics body size and offset
+        // Further initialize baseStats with player-specific defaults from PlayerStats.ts
+        // EntitySprite constructor already sets defaults for attackCooldown, projectileDamage, projectileSpeed.
+        // We override them here for the player specifically.
+        this.baseStats.attackCooldown = DEFAULT_PLAYER_STATS.attackSpeed;
+        this.baseStats.projectileDamage = DEFAULT_PLAYER_STATS.projectileDamage;
+        this.baseStats.projectileSpeed = DEFAULT_PLAYER_STATS.projectileSpeed;
+        this.baseStats.projectileSize = DEFAULT_PLAYER_STATS.projectileSize; // New stat
+        // Add other player-specific base stats if any, e.g., this.baseStats.pickupRadius = X;
+
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
-            // Calculate offsets to center the smaller physics body
             const offsetX = (PLAYER_WIDTH - PLAYER_PHYSICS_WIDTH) / 2;
             const offsetY = (PLAYER_HEIGHT - PLAYER_PHYSICS_HEIGHT) / 2;
-
             this.body.setSize(PLAYER_PHYSICS_WIDTH, PLAYER_PHYSICS_HEIGHT);
             this.body.setOffset(offsetX, offsetY);
-            // setCollideWorldBounds(true) is handled by EntitySprite ancsestor
         }
 
-        // Initialize with values from DEFAULT_PLAYER_STATS directly
-        this.projectileType = 'BULLET';
-        this.projectileDamage = DEFAULT_PLAYER_STATS.projectileDamage;
-        this.projectileSpeed = DEFAULT_PLAYER_STATS.projectileSpeed;
-        this.shootCooldown = DEFAULT_PLAYER_STATS.attackSpeed;
-        this.currentProjectileScale = DEFAULT_PLAYER_STATS.projectileSize;
-        this.currentDefense = DEFAULT_PLAYER_STATS.defense;
-        this.defense = DEFAULT_PLAYER_STATS.defense; // Initialize EntitySprite's defense property
+        // Removed direct assignments like this.projectileDamage, this.shootCooldown etc.
+        // They are now managed by baseStats and currentStats via EntitySprite.
 
-        // Set up auto-shooting timer - completely separate from movement
         this.initAutoShooting();
 
-        // Initialize WASD keys
         if (scene.input.keyboard) {
             this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
             this.keyA = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -113,50 +103,53 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             console.warn('PlayerSprite: Keyboard input system not available in the scene. WASD keys will not work.');
         }
 
-        // Listen for stat updates from ProgressionSystem
         this.scene.events.on('playerStatsUpdated', this.updateStats, this);
-        this.playerPhysicsHeight = PLAYER_PHYSICS_HEIGHT; // Set the correct physics height for footstep calculation
+        this.playerPhysicsHeight = PLAYER_PHYSICS_HEIGHT; 
+
+        this.recalculateStats(); // Important: Calculate currentStats after all baseStats are set.
     }
 
     public updateStats(newStats: IPlayerStats): void {
-        this.maxSpeed = newStats.movementSpeed;
-        this.projectileSpeed = newStats.projectileSpeed;
-        this.projectileDamage = newStats.projectileDamage;
-        this.currentProjectileScale = newStats.projectileSize;
+        // Store previous maxHp to see if we need to heal
+        const previousMaxHp = this.baseStats.maxHp;
 
-        this.currentDefense = newStats.defense; // Update local cache
-        this.defense = newStats.defense; // Update EntitySprite's defense property
+        this.baseStats.maxSpeed = newStats.movementSpeed;
+        this.baseStats.projectileSpeed = newStats.projectileSpeed;
+        this.baseStats.projectileDamage = newStats.projectileDamage;
+        this.baseStats.projectileSize = newStats.projectileSize; 
+        this.baseStats.defense = newStats.defense;
+        this.baseStats.maxHp = newStats.maxHealth;
 
-        if (this.maxHp !== newStats.maxHealth) {
-            const oldHpPercentage = this.hp / this.maxHp;
-            this.maxHp = newStats.maxHealth;
-            this.hp = Math.min(this.hp, this.maxHp);
-        }
-        // If only current HP can be upgraded (e.g. heal upgrade, not maxHP up), that'd be separate logic.
-
-        // Original value from newStats
         let newAttackSpeedValue = newStats.attackSpeed;
-
-        // Clamp the attack speed to a minimum
         if (newAttackSpeedValue < MINIMUM_SHOOT_COOLDOWN_MS) {
             console.warn(`PlayerSprite: attackSpeed ${newAttackSpeedValue}ms too low, clamping to ${MINIMUM_SHOOT_COOLDOWN_MS}ms`);
             newAttackSpeedValue = MINIMUM_SHOOT_COOLDOWN_MS;
         }
+        
+        const attackCooldownChanged = this.baseStats.attackCooldown !== newAttackSpeedValue;
+        this.baseStats.attackCooldown = newAttackSpeedValue;
 
-        if (this.shootCooldown !== newAttackSpeedValue) {
-            this.shootCooldown = newAttackSpeedValue;
-            // Re-initialize or update the shooting timer with the new cooldown
-            if (this.shootingTimer) {
-                this.shootingTimer.destroy(); // Stop existing timer
-            }
-            this.initAutoShooting(); // Re-create with new cooldown
+        this.recalculateStats(); // Recalculate currentStats based on new baseStats
+
+        // If maxHp increased, heal the player to the new maxHp
+        // Also handles the initial case where hp might not be at max after recalculateStats
+        if (this.baseStats.maxHp > previousMaxHp || this.currentStats.hp < this.currentStats.maxHp) {
+             // Heal to full if maxHP increased or current HP is less than current maxHP for any other reason.
+            this.currentStats.hp = this.currentStats.maxHp; 
         }
-        // Note: defense is stored, EntitySprite.takeDamage needs to use it.
-        // Note: projectileSize is stored, ProjectileSprite needs to use it on creation.
+        // Ensure health bar reflects the (potentially) new HP value immediately after healing
+        this.updateHealthBar(); 
+
+        if (attackCooldownChanged) {
+            if (this.shootingTimer) {
+                this.shootingTimer.destroy(); 
+            }
+            this.initAutoShooting(); 
+        }
     }
 
     public getProjectileScale(): number {
-        return this.currentProjectileScale;
+        return this.currentStats.projectileSize ?? 1.0;
     }
 
     // Initialize auto-shooting system
@@ -165,7 +158,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             this.shootingTimer.destroy();
         }
         this.shootingTimer = this.scene.time.addEvent({
-            delay: this.shootCooldown, // Uses the current shootCooldown
+            delay: this.currentStats.attackCooldown || DEFAULT_PLAYER_STATS.attackSpeed,
             callback: this.attemptAutoShoot,
             callbackScope: this,
             loop: true
@@ -241,62 +234,77 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
      * For local players only (not network controlled)
      */
     public updateMovement(cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined): void {
-        // Don't process movement for network-controlled players
         if (this.isNetworkControlled) return;
-
-        if (!this.body) {
-            return;
-        }
+        if (!this.body) return;
 
         const body = this.body as Phaser.Physics.Arcade.Body;
-        let inputTargetVelocityX = 0;
-        let inputTargetVelocityY = 0;
+        const speed = this.currentStats.maxSpeed || DEFAULT_PLAYER_STATS.movementSpeed; // Use currentStats
 
-        // Check for pressed keys (Arrow keys OR WASD)
-        const leftPressed = (cursors?.left.isDown || this.keyA?.isDown) ?? false;
-        const rightPressed = (cursors?.right.isDown || this.keyD?.isDown) ?? false;
-        const upPressed = (cursors?.up.isDown || this.keyW?.isDown) ?? false;
-        const downPressed = (cursors?.down.isDown || this.keyS?.isDown) ?? false;
+        let targetVelocityX = 0;
+        let targetVelocityY = 0;
+
+        // WASD keys for movement
+        const upPressed = this.keyW?.isDown;
+        const downPressed = this.keyS?.isDown;
+        const leftPressed = this.keyA?.isDown;
+        const rightPressed = this.keyD?.isDown;
 
         if (leftPressed) {
-            inputTargetVelocityX = -this.maxSpeed;
-            this.setFlipX(true); // Face left
+            targetVelocityX = -speed;
+            this.setFlipX(true);
         } else if (rightPressed) {
-            inputTargetVelocityX = this.maxSpeed;
-            this.setFlipX(false); // Face right
+            targetVelocityX = speed;
+            this.setFlipX(false);
         }
-        // If no horizontal movement input, flipX remains as is (allowing auto-shoot to control it)
 
         if (upPressed) {
-            inputTargetVelocityY = -this.maxSpeed;
+            targetVelocityY = -speed;
         } else if (downPressed) {
-            inputTargetVelocityY = this.maxSpeed;
+            targetVelocityY = speed;
         }
 
-        // Normalize diagonal speed for input target
-        if (inputTargetVelocityX !== 0 && inputTargetVelocityY !== 0) {
-            const diagonalFactor = Math.sqrt(0.5);
-            inputTargetVelocityX *= diagonalFactor;
-            inputTargetVelocityY *= diagonalFactor;
+        // Diagonal movement normalization (optional but good for fairness)
+        if (targetVelocityX !== 0 && targetVelocityY !== 0) {
+            targetVelocityX *= Math.sqrt(0.5);
+            targetVelocityY *= Math.sqrt(0.5);
         }
 
-        // Smoothly interpolate current velocity towards target velocity
-        // Use accelerationFactor if there's input, otherwise use decelerationFactor
-        const horizontalInputActive = leftPressed || rightPressed;
-        const xFactor = (inputTargetVelocityX !== 0 || horizontalInputActive) ? this.accelerationFactor : this.decelerationFactor;
-        body.velocity.x = Phaser.Math.Linear(body.velocity.x, inputTargetVelocityX, xFactor);
+        // Apply acceleration/deceleration for smoother movement
+        body.setVelocityX(Phaser.Math.Linear(body.velocity.x, targetVelocityX, this.accelerationFactor));
+        body.setVelocityY(Phaser.Math.Linear(body.velocity.y, targetVelocityY, this.accelerationFactor));
 
-        const verticalInputActive = upPressed || downPressed;
-        const yFactor = (inputTargetVelocityY !== 0 || verticalInputActive) ? this.accelerationFactor : this.decelerationFactor;
-        body.velocity.y = Phaser.Math.Linear(body.velocity.y, inputTargetVelocityY, yFactor);
+        // Dash logic (Space key)
+        const spaceJustDown = Phaser.Input.Keyboard.JustDown(cursors?.space as Phaser.Input.Keyboard.Key);
+        const currentTime = this.scene.time.now;
 
-        // If very close to zero, set velocity to zero to prevent endless drifting
-        const stopThreshold = 1;
-        if (Math.abs(body.velocity.x) < stopThreshold && inputTargetVelocityX === 0 && !horizontalInputActive) {
-            body.velocity.x = 0;
-        }
-        if (Math.abs(body.velocity.y) < stopThreshold && inputTargetVelocityY === 0 && !verticalInputActive) {
-            body.velocity.y = 0;
+        if (this.isDashing) {
+            if (currentTime >= this.dashEndTime) {
+                this.isDashing = false;
+                // Speed is already being managed by the setVelocityX/Y above, will naturally return to normal.
+            }
+        } else if (spaceJustDown && currentTime > this.lastDashTime + PLAYER_DASH_COOLDOWN) {
+            this.isDashing = true;
+            this.dashEndTime = currentTime + PLAYER_DASH_DURATION;
+            this.lastDashTime = currentTime;
+
+            const dashSpeed = speed * PLAYER_DASH_SPEED_MULTIPLIER;
+            let dashDirectionX = 0;
+            let dashDirectionY = 0;
+
+            if (targetVelocityX !== 0 || targetVelocityY !== 0) {
+                // Dash in the direction of current movement input
+                const mag = Math.sqrt(targetVelocityX * targetVelocityX + targetVelocityY * targetVelocityY);
+                dashDirectionX = (targetVelocityX / mag) * dashSpeed;
+                dashDirectionY = (targetVelocityY / mag) * dashSpeed;
+            } else {
+                // Dash in the direction player is facing if no movement input
+                dashDirectionX = (this.flipX ? -1 : 1) * dashSpeed;
+            }
+            body.setVelocity(dashDirectionX, dashDirectionY);
+            
+            if (this.particleSystem) {
+                this.particleSystem.playDashEffect(this.x, this.y, this.flipX ? -1 : 1);
+            }
         }
 
         // Send position update if connected to network and position has changed significantly

@@ -284,44 +284,59 @@ export class ParticleSystem {
         });
     }
 
-    public playFootstep(x: number, y: number): void {
+    public emitFootstep(x: number, y: number): void {
         if (!this.footstepEmitter) return;
 
-        // Always use grey tint regardless of what was passed
         const greyTint = 0x777777;
         
-        // This updates the emitter config with the grey tint
         this.footstepEmitter.setConfig({
             tint: greyTint,
             speed: { min: 8, max: 16 },
-            angle: { min: 180, max: 360 }, // Full 180° range (half-circle upward)
+            angle: { min: 180, max: 360 }, 
             scale: { start: 0.8, end: 1.3 },
-            alpha: { start: 0.5, end: 0 }, // Reduced starting alpha for more transparency
+            alpha: { start: 0.5, end: 0 }, 
             lifespan: { min: 300, max: 500 },
             blendMode: Phaser.BlendModes.NORMAL,
             gravityY: -30,
-            quantity: 4,
+            quantity: 1, // Emit fewer particles per individual puff for a more spread out effect
             frequency: -1,
             emitting: false,
-            rotate: { min: -45, max: 45 } // More varied rotation
+            rotate: { min: -45, max: 45 } 
         });
         
-        // Create a more varied foot-focused spread pattern
-        const footWidth = 20; // Increased from 10 for wider horizontal spread
-        const baseCount = 4;
+        const footWidth = 20; 
+        const basePuffs = 3; // Number of puffs to create for a footstep effect
         
-        // Create several puffs with random offsets along the foot area
-        for (let i = 0; i < 3; i++) {
-            // Random x-offset within foot width
-            const offsetX = Phaser.Math.Between(-footWidth, footWidth);
-            // Random y-offset to make dust appear from different parts of the foot (all at bottom)
-            const offsetY = Phaser.Math.Between(-5, 5); // Increased from -2, 2 for more vertical spread
-            // Random particle count for each puff
-            const particleCount = Phaser.Math.Between(1, baseCount);
+        for (let i = 0; i < basePuffs; i++) {
+            const offsetX = Phaser.Math.Between(-footWidth / 2, footWidth / 2);
+            const offsetY = Phaser.Math.Between(-5, 5); 
+            const particleCount = Phaser.Math.Between(1, 2); // 1 or 2 particles per puff
             
-            // Emit particles at this offset
             this.footstepEmitter.explode(particleCount, x + offsetX, y + offsetY);
         }
+    }
+
+    public playDashEffect(x: number, y: number, direction: number): void {
+        // Direction: 1 for right, -1 for left
+        const dashEmitter = this.scene.add.particles(0, 0, 'particle_core', {
+            x: x,
+            y: y,
+            speed: { min: 150, max: 250 }, // Fast streaks
+            // Emit particles horizontally opposite to the dash direction for a trail
+            angle: (direction > 0) ? { min: 160, max: 200 } : { min: -20, max: 20 }, 
+            scale: { start: 0.5, end: 0.1 },
+            alpha: { start: 0.7, end: 0 },
+            lifespan: { min: 100, max: 200 }, // Short lifespan for quick dash effect
+            blendMode: Phaser.BlendModes.ADD,
+            tint: 0x00ffff, // Cyan, like a speed effect
+            quantity: { min: 5, max: 8 }, // Fewer particles for a quick burst
+            frequency: -1, // Emit all at once
+            emitting: true // Emitter should emit immediately and then stop (lifespan handles particle removal)
+        });
+        // Self-destroy emitter after a short period to clean up
+        this.scene.time.delayedCall(250, () => {
+            dashEmitter.destroy();
+        });
     }
 
     public destroy(): void {

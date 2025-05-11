@@ -13,6 +13,11 @@ export default class HudScene extends Phaser.Scene {
     private xpBarFill!: Phaser.GameObjects.Rectangle;
     private networkSystem: NetworkSystem | undefined;
     
+    // Enemy indicator related
+    private enemyIndicators: Map<string, Phaser.GameObjects.Triangle> = new Map();
+    private indicatorPool: Phaser.GameObjects.Triangle[] = [];
+    private indicatorY = 20; // Y position for indicators (top of screen)
+    
     // XP tracking
     private currentXp = 0;
     private nextLevelXp = 100;
@@ -146,6 +151,10 @@ export default class HudScene extends Phaser.Scene {
         this.game.events.on('newWaveStartedHud', this.handleNewWaveStarted, this);
         this.game.events.on('waveClearHud', this.handleWaveClearHud, this);
         this.game.events.on('allWavesClearedHud', this.handleAllWavesClearedHud, this);
+        
+        // Listen for enemy position updates
+        this.game.events.on('updateEnemyIndicators', this.updateEnemyIndicators, this);
+        this.game.events.on('enemyRemoved', this.removeEnemyIndicator, this);
 
         // For backward compatibility - if NetworkSystem is provided, still listen to it
         this.networkSystem?.on('hud', this.updateHudDataFromNetwork, this);
@@ -311,6 +320,186 @@ export default class HudScene extends Phaser.Scene {
             }
         });
     }
+    
+    // Enemy indicator management
+    private getOrCreateIndicator(): Phaser.GameObjects.Triangle {
+        // Reuse an indicator from the pool if available
+        if (this.indicatorPool.length > 0) {
+            const indicator = this.indicatorPool.pop();
+            if (indicator) {
+                indicator.setVisible(true);
+                return indicator;
+            }
+        }
+        
+        // Create a new triangle indicator (pointing up by default)
+        const indicator = this.add.triangle(0, 0, 0, -10, -7, 5, 7, 5, 0xFF0000)
+            .setOrigin(0.5, 0.5)
+            .setScrollFactor(0)
+            .setDepth(15); // Above other HUD elements
+        
+        // Add a subtle pulsing effect
+        this.tweens.add({
+            targets: indicator,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        
+        return indicator;
+    }
+    
+    private updateEnemyIndicators(data: {
+        enemies: Array<{id: string, worldX: number, worldY: number}>,
+        cameraX: number,
+        cameraY: number,
+        cameraWidth: number,
+        cameraHeight: number
+    }) {
+        const { enemies, cameraX, cameraY, cameraWidth, cameraHeight } = data;
+        const camWidth = this.cameras.main.width;
+        const camHeight = this.cameras.main.height;
+        
+        // Calculate screen edges with padding
+        const padding = 20; // Padding from screen edge
+        const leftEdge = padding;
+        const rightEdge = camWidth - padding;
+        const topEdge = padding;
+        const bottomEdge = camHeight - padding;
+        
+        // Track which enemy IDs we've processed
+        const processedEnemyIds = new Set<string>();
+        
+        for (const enemy of enemies) {
+            processedEnemyIds.add(enemy.id);
+            
+            // Calculate if the enemy is on screen
+            const isOnScreen = (
+                enemy.worldX >= cameraX && 
+                enemy.worldX <= cameraX + cameraWidth &&
+                enemy.worldY >= cameraY && 
+                enemy.worldY <= cameraY + cameraHeight
+            );
+            
+            if (!isOnScreen) {
+                // Get or create an indicator for this enemy
+                let indicator = this.enemyIndicators.get(enemy.id);
+                if (!indicator) {
+                    indicator = this.getOrCreateIndicator();
+                    this.enemyIndicators.set(enemy.id, indicator);
+                }
+                
+                // Calculate angle from camera center to enemy
+                const camCenterX = cameraX + cameraWidth / 2;
+                const camCenterY = cameraY + cameraHeight / 2;
+                const angle = Phaser.Math.Angle.Between(camCenterX, camCenterY, enemy.worldX, enemy.worldY);
+                
+                // Calculate the position on the screen edge
+                let indicatorX: number;
+                let indicatorY: number;
+                
+                // Convert angle to normalized vector
+                const dx = Math.cos(angle);
+                const dy = Math.sin(angle);
+                
+                // Determine which screen edge to place the indicator on
+                // This is based on which edge the angle vector intersects first
+                
+                // Calculate the intersection with the screen edges
+                // Time to hit horizontal edges (top/bottom)
+                const topIntersect = (topEdge - camHeight / 2) / dy;
+                const bottomIntersect = (bottomEdge - camHeight / 2) / dy;
+                
+                // Time to hit vertical edges (left/right)
+                const leftIntersect = (leftEdge - camWidth / 2) / dx;
+                const rightIntersect = (rightEdge - camWidth / 2) / dx;
+                
+                // Find the first edge that the ray hits
+                const intersections = [
+                    { t: topIntersect, edge: 'top', valid: dy < 0 && topIntersect > 0 },
+                    { t: bottomIntersect, edge: 'bottom', valid: dy > 0 && bottomIntersect > 0 },
+                    { t: leftIntersect, edge: 'left', valid: dx < 0 && leftIntersect > 0 },
+                    { t: rightIntersect, edge: 'right', valid: dx > 0 && rightIntersect > 0 }
+                ].filter(i => i.valid);
+                
+                // Sort by time to hit (smallest first)
+                intersections.sort((a, b) => a.t - b.t);
+                
+                // Use the first valid intersection
+                if (intersections.length > 0) {
+                    const intersection = intersections[0];
+                    
+                    // Calculate the position based on the intersection
+                    if (intersection && intersection.edge === 'top') {
+                        indicatorX = camWidth / 2 + intersection.t * dx;
+                        indicatorY = topEdge;
+                        // Rotate to point away from top edge (downward)
+                        indicator.setRotation(angle);
+                    } else if (intersection && intersection.edge === 'bottom') {
+                        indicatorX = camWidth / 2 + intersection.t * dx;
+                        indicatorY = bottomEdge;
+                        // Rotate to point away from bottom edge (upward)
+                        indicator.setRotation(angle + Math.PI);
+                    } else if (intersection && intersection.edge === 'left') {
+                        indicatorX = leftEdge;
+                        indicatorY = camHeight / 2 + intersection.t * dy;
+                        // Rotate to point away from left edge (rightward)
+                        indicator.setRotation(angle + Math.PI/2);
+                    } else if (intersection && intersection.edge === 'right') {
+                        indicatorX = rightEdge;
+                        indicatorY = camHeight / 2 + intersection.t * dy;
+                        // Rotate to point away from right edge (leftward)
+                        indicator.setRotation(angle - Math.PI/2);
+                    } else {
+                        // Fallback if somehow the intersection exists but has an invalid edge
+                        indicatorX = camWidth / 2;
+                        indicatorY = topEdge;
+                        indicator.setRotation(angle);
+                    }
+                    
+                    // Clamp the indicator position to ensure it stays within bounds
+                    indicatorX = Phaser.Math.Clamp(indicatorX, leftEdge, rightEdge);
+                    indicatorY = Phaser.Math.Clamp(indicatorY, topEdge, bottomEdge);
+                    
+                    // Set the indicator position
+                    indicator.setPosition(indicatorX, indicatorY);
+                } else {
+                    // Fallback if no valid intersection (shouldn't happen but just in case)
+                    indicator.setPosition(camWidth / 2, topEdge);
+                    indicator.setRotation(angle);
+                }
+            } else if (this.enemyIndicators.has(enemy.id)) {
+                // Enemy is on screen, hide its indicator
+                const indicator = this.enemyIndicators.get(enemy.id);
+                if (indicator) {
+                    indicator.setVisible(false);
+                    this.indicatorPool.push(indicator);
+                    this.enemyIndicators.delete(enemy.id);
+                }
+            }
+        }
+        
+        // Remove indicators for enemies that no longer exist
+        for (const [enemyId, indicator] of this.enemyIndicators.entries()) {
+            if (!processedEnemyIds.has(enemyId)) {
+                indicator.setVisible(false);
+                this.indicatorPool.push(indicator);
+                this.enemyIndicators.delete(enemyId);
+            }
+        }
+    }
+    
+    private removeEnemyIndicator(data: { enemyId: string }) {
+        const indicator = this.enemyIndicators.get(data.enemyId);
+        if (indicator) {
+            indicator.setVisible(false);
+            this.indicatorPool.push(indicator);
+            this.enemyIndicators.delete(data.enemyId);
+        }
+    }
 
     shutdown() {
         this.game.events.off('updateHud', this.handleUpdateHud, this);
@@ -318,6 +507,19 @@ export default class HudScene extends Phaser.Scene {
         this.game.events.off('newWaveStartedHud', this.handleNewWaveStarted, this);
         this.game.events.off('waveClearHud', this.handleWaveClearHud, this);
         this.game.events.off('allWavesClearedHud', this.handleAllWavesClearedHud, this);
+        this.game.events.off('updateEnemyIndicators', this.updateEnemyIndicators, this);
+        this.game.events.off('enemyRemoved', this.removeEnemyIndicator, this);
         this.networkSystem?.off('hud', this.updateHudDataFromNetwork, this);
+        
+        // Clean up indicators
+        for (const indicator of this.enemyIndicators.values()) {
+            indicator.destroy();
+        }
+        this.enemyIndicators.clear();
+        
+        for (const indicator of this.indicatorPool) {
+            indicator.destroy();
+        }
+        this.indicatorPool = [];
     }
 } 

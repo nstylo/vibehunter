@@ -9,12 +9,66 @@
         "impactSoundKey": "sfx_bullet_hit"
     },
     {
-        "type": "FIREBALL",
-        "textureName": "projectile_fireball_texture",
-        "width": 16,
-        "height": 16,
-        "color": "0xffa500",
-        "impactParticleEffect": "fireballExplosion",
-        "impactSoundKey": "sfx_fireball_hit"
+        "type": "PEPPER_SPRAY",
+        "textureName": "projectile_pepperspray_texture",
+        "width": 12,
+        "height": 12,
+        "color": "0xffcc00",
+        "impactParticleEffect": "pepperSprayCloud",
+        "impactSoundKey": "sfx_spray_hit"
+    },
+    {
+        "type": "PUDDLE",
+        "textureName": "projectile_puddle_texture",
+        "width": 20,
+        "height": 10,
+        "color": "0x33ccff",
+        "impactParticleEffect": "puddleSplash",
+        "impactSoundKey": "sfx_puddle_hit"
+    },
+    {
+        "type": "SYRINGE",
+        "textureName": "projectile_syringe_texture",
+        "width": 14,
+        "height": 6,
+        "color": "0xeeeeee",
+        "impactParticleEffect": "syringeImpact",
+        "impactSoundKey": "sfx_syringe_hit"
+    },
+    {
+        "type": "FLAME",
+        "textureName": "projectile_flame_texture",
+        "width": 18,
+        "height": 18,
+        "color": "0xff3300",
+        "impactParticleEffect": "flameImpact",
+        "impactSoundKey": "sfx_flame_hit"
+    },
+    {
+        "type": "TICKET",
+        "textureName": "projectile_ticket_texture",
+        "width": 15,
+        "height": 10,
+        "color": "0xffffcc",
+        "impactParticleEffect": "paperImpact",
+        "impactSoundKey": "sfx_paper_hit"
+    },
+    {
+        "type": "SHOUT",
+        "textureName": "projectile_shout_texture",
+        "width": 25,
+        "height": 15,
+        "color": "0xaaaaaa",
+        "impactParticleEffect": "soundwaveImpact",
+        "impactSoundKey": "sfx_shout_hit"
+    },
+    {
+        "type": "TASER",
+        "textureName": "projectile_taser_texture",
+        "width": 12,
+        "height": 6,
+        "color": "0xffff00",
+        "impactParticleEffect": "electricImpact",
+        "impactSoundKey": "sfx_electric_hit"
     }
 ] 

@@ -5,6 +5,7 @@ import {
     EVENT_ENTITY_SHOOT_PROJECTILE
 } from '../../common/events';
 import type ProjectileSprite from './ProjectileSprite';
+import type { ParticleSystem } from '../systems/ParticleSystem';
 
 export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     public entityId: string;
@@ -22,17 +23,26 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     public lastShotTime = 0;
 
     // Wobble animation properties
-    protected wobbleAngleMagnitude = 3; // Max angle in degrees for wobble
+    protected wobbleAngleMagnitude = 2; // Max angle in degrees for wobble
     protected wobbleAngleSpeed = 0.015; // Speed of wobble oscillation (radians per ms)
     private wobbleAngleAccumulator = 0; // Accumulator for the sine wave
 
-    constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string, entityId: string, hp: number, maxHp: number, maxSpeed: number) {
+    // Particle system integration
+    protected particleSystem?: ParticleSystem;
+    protected canEmitFootsteps = true;
+    protected footstepEmitInterval = 150;
+    private lastFootstepTime = 0;
+    // Constant for player physics height to be accessible
+    protected playerPhysicsHeight = 64; // Default, can be overridden if necessary or passed
+
+    constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string, entityId: string, hp: number, maxHp: number, maxSpeed: number, particleSystem?: ParticleSystem) {
         super(scene, x, y, textureKey);
         this.entityId = entityId;
         this.hp = hp;
         this.maxHp = maxHp;
         this.maxSpeed = maxSpeed;
         this.defense = 0; // Default defense to 0
+        this.particleSystem = particleSystem; // Assign particle system
 
         this.healthBarGraphics = scene.add.graphics();
         this.updateHealthBar();
@@ -215,6 +225,22 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     preUpdate(time: number, delta: number): void {
         super.preUpdate(time, delta);
         this.updateWobble(time, delta); // Add wobble update
+
+        // Emit footstep particles if moving
+        if (this.particleSystem && this.canEmitFootsteps && this.active && this.body) {
+            const arcadeBody = this.body as Phaser.Physics.Arcade.Body;
+            const isCurrentlyMoving = arcadeBody.velocity && (arcadeBody.velocity.x !== 0 || arcadeBody.velocity.y !== 0);
+
+            if (isCurrentlyMoving && time > this.lastFootstepTime + this.footstepEmitInterval) {
+                // Adjust Y position to be near the feet.
+                // Assuming sprite origin is 0.5, 0.5 (center) and physics body is centered.
+                // The bottom of the physics body is at this.y + this.playerPhysicsHeight / 2.
+                const footstepY = this.y + (this.playerPhysicsHeight / 2) - 5; // Small offset upwards from the very bottom of physics body
+                this.particleSystem.playFootstep(this.x, footstepY);
+                this.lastFootstepTime = time;
+            }
+        }
+
         if (this.active && this.hp > 0) {
             this.updateHealthBar();
         } else {

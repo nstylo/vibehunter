@@ -5,6 +5,7 @@ export class ParticleSystem {
     private scene: Phaser.Scene;
     private projectileImpactEmitters: Map<string, Phaser.GameObjects.Particles.ParticleEmitter | Record<string, Phaser.GameObjects.Particles.ParticleEmitter>>;
     private enemyDeathEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+    private footstepEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -16,6 +17,7 @@ export class ParticleSystem {
         this.createParticleTextures();
         this.initProjectileImpactEmitters();
         this.initEnemyDeathEmitter();
+        this.initFootstepEmitter();
     }
 
     private createParticleTextures(): void {
@@ -76,6 +78,29 @@ export class ParticleSystem {
             graphics.closePath();
             graphics.fill();
             graphics.generateTexture('flame_particle', 10, 10);
+            graphics.clear();
+        }
+
+        // Footstep puff texture - small, slightly transparent
+        if (!this.scene.textures.exists('footstep_puff')) {
+            graphics.clear();
+            // Create a cloud-like texture with multiple overlapping circles
+            graphics.fillStyle(0xffffff, 0.6); // Reduced base opacity
+            graphics.fillCircle(8, 8, 8); // Main circle
+            
+            // Add more irregular shapes to create a cloud-like appearance
+            graphics.fillStyle(0xffffff, 0.5); // Reduced opacity
+            graphics.fillCircle(4, 8, 5); // Left bulge
+            graphics.fillCircle(12, 8, 5); // Right bulge
+            graphics.fillCircle(8, 4, 5); // Top bulge
+            graphics.fillCircle(8, 12, 5); // Bottom bulge
+            
+            // Slight inner shading for depth
+            graphics.fillStyle(0x444444, 0.2); // Reduced opacity
+            graphics.fillCircle(8, 8, 3);
+            
+            // Generate a larger texture
+            graphics.generateTexture('footstep_puff', 16, 16);
             graphics.clear();
         }
         graphics.destroy();
@@ -155,7 +180,7 @@ export class ParticleSystem {
             emitting: false
         });
 
-        this.projectileImpactEmitters.set(ProjectileType.FIREBALL, {
+        this.projectileImpactEmitters.set(ProjectileType.FLAME, {
             main: fireballMainEmitter,
             smoke: fireballSmokeEmitter,
             embers: fireballEmberEmitter
@@ -177,6 +202,23 @@ export class ParticleSystem {
         });
     }
 
+    private initFootstepEmitter(): void {
+        this.footstepEmitter = this.scene.add.particles(0, 0, 'footstep_puff', {
+            speed: { min: 8, max: 20 }, // Slower movement for cloudy drift
+            angle: { min: 180, max: 360 }, // Full 180° range from straight left to straight right (full half-circle upward)
+            scale: { start: 0.8, end: 1.3 },  // Grow larger over time like clouds
+            alpha: { start: 0.6, end: 0 },    // Reduced starting alpha for more transparency
+            lifespan: { min: 500, max: 800 }, // Longer lifespan for cloud-like drift
+            blendMode: Phaser.BlendModes.NORMAL,
+            tint: 0xaaaaaa, // Grey clouds
+            gravityY: -30, // Slight upward drift for clouds
+            quantity: 4,
+            frequency: -1,
+            emitting: false,
+            rotate: { min: -45, max: 45 } // More varied rotation for natural movement
+        });
+    }
+
     public playProjectileImpact(
         projectileType: ProjectileType,
         x: number,
@@ -188,7 +230,7 @@ export class ParticleSystem {
 
         if (!emitterOrGroup) return;
 
-        if (projectileType === ProjectileType.FIREBALL) {
+        if (projectileType === ProjectileType.FLAME) {
             const group = emitterOrGroup as Record<string, Phaser.GameObjects.Particles.ParticleEmitter>;
             const baseQuantityMain = Phaser.Math.Between(20, 30);
             const baseQuantitySmoke = Phaser.Math.Between(10, 15);
@@ -235,11 +277,51 @@ export class ParticleSystem {
         this.scene.tweens.add({
             targets: flash,
             alpha: { from: 0.6, to: 0 },
-            scale: { from: 1, to: 1.8 }, // Reduced scale effect
+            scale: { from: 1, to: 1.6 }, // Reduced scale effect
             duration: 250, // Shorter duration
             ease: 'Cubic.easeOut',
             onComplete: () => flash.destroy()
         });
+    }
+
+    public playFootstep(x: number, y: number): void {
+        if (!this.footstepEmitter) return;
+
+        // Always use grey tint regardless of what was passed
+        const greyTint = 0x777777;
+        
+        // This updates the emitter config with the grey tint
+        this.footstepEmitter.setConfig({
+            tint: greyTint,
+            speed: { min: 8, max: 16 },
+            angle: { min: 180, max: 360 }, // Full 180° range (half-circle upward)
+            scale: { start: 0.8, end: 1.3 },
+            alpha: { start: 0.5, end: 0 }, // Reduced starting alpha for more transparency
+            lifespan: { min: 300, max: 500 },
+            blendMode: Phaser.BlendModes.NORMAL,
+            gravityY: -30,
+            quantity: 4,
+            frequency: -1,
+            emitting: false,
+            rotate: { min: -45, max: 45 } // More varied rotation
+        });
+        
+        // Create a more varied foot-focused spread pattern
+        const footWidth = 20; // Increased from 10 for wider horizontal spread
+        const baseCount = 4;
+        
+        // Create several puffs with random offsets along the foot area
+        for (let i = 0; i < 3; i++) {
+            // Random x-offset within foot width
+            const offsetX = Phaser.Math.Between(-footWidth, footWidth);
+            // Random y-offset to make dust appear from different parts of the foot (all at bottom)
+            const offsetY = Phaser.Math.Between(-5, 5); // Increased from -2, 2 for more vertical spread
+            // Random particle count for each puff
+            const particleCount = Phaser.Math.Between(1, baseCount);
+            
+            // Emit particles at this offset
+            this.footstepEmitter.explode(particleCount, x + offsetX, y + offsetY);
+        }
     }
 
     public destroy(): void {
@@ -262,6 +344,9 @@ export class ParticleSystem {
 
         if (this.enemyDeathEmitter) {
             this.enemyDeathEmitter.destroy();
+        }
+        if (this.footstepEmitter) {
+            this.footstepEmitter.destroy();
         }
     }
 } 

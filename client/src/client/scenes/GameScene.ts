@@ -20,6 +20,7 @@ import { ProgressionSystem } from '../systems/ProgressionSystem'; // Import Prog
 import { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } from '../types/multiplayer'; // Import multiplayer types
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
+import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -104,6 +105,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     preload() {
+        // Preload enemy textures based on definitions
+        for (const enemyDef of GAME_ENEMY_DEFINITIONS) {
+            if (enemyDef.assetUrl && !this.textures.exists(enemyDef.assetUrl)) {
+                // enemyDef.assetUrl is now the ID string (e.g., "1")
+                // This ID string will also be the texture key
+                const textureKey = enemyDef.assetUrl;
+                const filePath = `assets/enemies/${enemyDef.assetUrl}.png`; // e.g., assets/enemies/1.png
+                this.load.image(textureKey, filePath);
+            } else if (!enemyDef.assetUrl) {
+                console.warn(`Enemy definition for '${enemyDef.name}' is missing assetUrl.`);
+            }
+        }
     }
 
     create(data: GameSceneData) {
@@ -126,7 +139,7 @@ export class GameScene extends Phaser.Scene {
         // Initialize player BEFORE setting up collision
         const playerX = data.initialPosition?.x ?? worldPixelWidth / 2;
         const playerY = data.initialPosition?.y ?? worldPixelHeight / 2;
-        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer');
+        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', this.particleSystem);
 
         // Configure player network mode if multiplayer
         if (this.isMultiplayer && this.networkSystem && this.player) {
@@ -470,8 +483,6 @@ export class GameScene extends Phaser.Scene {
             this.cursorHideTimer.remove(false);
             this.cursorHideTimer = undefined;
         }
-
-        console.log('GameScene shutdown complete.');
     }
 
     /**
@@ -531,7 +542,7 @@ export class GameScene extends Phaser.Scene {
 
         if (!remotePlayer) {
             // Create new remote player sprite
-            remotePlayer = new PlayerSprite(this, position.x, position.y, id);
+            remotePlayer = new PlayerSprite(this, position.x, position.y, id, this.particleSystem);
 
             // Mark as network controlled
             if (this.networkSystem) {

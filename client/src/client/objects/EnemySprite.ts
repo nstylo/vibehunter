@@ -6,13 +6,17 @@ import type ProjectileSprite from './ProjectileSprite'; // Import the class for 
 import type { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import enemy definitions
 
+const ENEMY_SPRITE_KEYS: string[] = [];
+for (let i = 1; i <= 36; i++) {
+    ENEMY_SPRITE_KEYS.push(`enemy_${i}`);
+}
+
 export class EnemySprite extends EntitySprite {
     private targetPlayer: PlayerSprite | null = null;
     private lastMeleeAttackTime = 0;
-    public enemyType: string; // e.g., 'slime', 'goblin'
+    public enemyType: string; // e.g., 'patrol_cop', 'security_guard', etc.
     public isRanged = false; // Initialized to false
     public xpValue = 10;
-    private particleSystem?: ParticleSystem;
     private shootingTimer: Phaser.Time.TimerEvent | null = null;
 
     private meleeAttackDamage: number;
@@ -29,14 +33,12 @@ export class EnemySprite extends EntitySprite {
         particleSystem?: ParticleSystem
     ) {
         const definition = ENEMY_DEFINITIONS.find(def => def.name === enemyType);
+        
         if (!definition) {
-            console.error(`EnemySprite: No definition found for enemyType: ${enemyType}`);
-            // Fallback or throw error - for now, let's use a default or error out
-            // For simplicity, we'll proceed with some defaults but this should be handled robustly
-            super(scene, x, y, 'default_missing_texture', enemyId, 10, 10, 50);
+            console.error(`EnemySprite: No definition found for enemyType: ${enemyType}. Using fallback texture.`);
+            super(scene, x, y, 'default_missing_texture', enemyId, 10, 10, 50, particleSystem);
             this.enemyType = enemyType;
             this.targetPlayer = targetPlayer;
-            this.particleSystem = particleSystem;
             this.meleeAttackDamage = 5;
             this.meleeAttackRange = 30;
             this.rangedAttackRange = null;
@@ -45,15 +47,33 @@ export class EnemySprite extends EntitySprite {
             return; 
         }
 
-        const textureKey = definition.assetUrl; 
-        if (!scene.textures.exists(textureKey)) {
-            EnemySprite.generateEnemyTexture(scene, textureKey, enemyType, definition.width, definition.height);
+        const textureKey = definition.assetUrl; // This is now the ID string, e.g., "1"
+
+        if (!textureKey) {
+            console.error(`EnemySprite: No assetUrl (textureKey) found for enemyType: ${enemyType}. Using fallback texture.`);
+            super(scene, x, y, 'default_missing_texture', enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
+            this.enemyType = enemyType;
+            this.targetPlayer = targetPlayer;
+            this.xpValue = definition.xpValue;
+            this.meleeAttackDamage = definition.meleeAttackDamage;
+            this.meleeAttackRange = definition.meleeAttackRange;
+            this.rangedAttackRange = definition.isRanged ? definition.rangedAttackRange : null;
+            this.shootCooldown = definition.attackCooldown;
+            if (this.body instanceof Phaser.Physics.Arcade.Body) {
+                this.body.setSize(definition.width, definition.height);
+            }
+            return;
         }
 
-        super(scene, x, y, textureKey, enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed);
+        if (!scene.textures.exists(textureKey)) {
+            console.warn(`EnemySprite: Texture key '${textureKey}' not loaded for enemyType '${enemyType}'. Check GameScene preload. Using fallback texture.`);
+            super(scene, x, y, 'default_missing_texture', enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
+        } else {
+            super(scene, x, y, textureKey, enemyId, definition.defaultHp, definition.defaultHp, definition.defaultMaxSpeed, particleSystem);
+        }
+        
         this.enemyType = enemyType;
         this.targetPlayer = targetPlayer;
-        this.particleSystem = particleSystem;
         this.xpValue = definition.xpValue;
 
         // Set isRanged based on definition
@@ -68,16 +88,69 @@ export class EnemySprite extends EntitySprite {
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
             this.body.setSize(definition.width, definition.height);
         }
+        this.playerPhysicsHeight = definition.height; // Set physics height from definition
 
         if (definition.isRanged) {
-            this.projectileType = definition.projectileType || 'BULLET'; // Assign string type from definition or default
-            // Assuming projectile stats like damage, speed, lifespan might also come from definition or be base EntitySprite stats
-            // For now, keep existing specific overrides for goblin/ranged as example, or abstract further
-            if (enemyType === 'goblin') { // Example of specific override if needed
-                this.projectileDamage = 8; 
-                this.projectileSpeed = 400;
-                this.projectileLifespan = 3000;
+            // Convert string projectile type to enum
+            if (definition.projectileType) {
+                const projectileTypeKey = definition.projectileType as keyof typeof ProjectileType;
+                if (ProjectileType[projectileTypeKey]) {
+                    this.projectileType = definition.projectileType;
+                } else {
+                    console.warn(`Unknown projectile type '${definition.projectileType}' for enemy '${enemyType}', defaulting to BULLET`);
+                    this.projectileType = 'BULLET';
+                }
+            } else {
+                this.projectileType = 'BULLET'; // Default
             }
+            
+            // Apply enemy-specific projectile properties if needed
+            switch(enemyType) {
+                case 'caffeine_rookie':
+                    this.projectileDamage = 10;
+                    this.projectileSpeed = 450; // Faster than average
+                    this.projectileLifespan = 2500;
+                    break;
+                case 'security_guard':
+                    this.projectileDamage = 15;
+                    this.projectileSpeed = 250; // Slower but more damage
+                    this.projectileLifespan = 1000; // Shorter range
+                    break;
+                case 'janitor':
+                    this.projectileDamage = 8;
+                    this.projectileSpeed = 200; // Slow puddles
+                    this.projectileLifespan = 2000;
+                    break;
+                case 'needle_dealer':
+                    this.projectileDamage = 12;
+                    this.projectileSpeed = 350;
+                    this.projectileLifespan = 1800;
+                    break;
+                case 'street_arsonist':
+                    this.projectileDamage = 18;
+                    this.projectileSpeed = 300;
+                    this.projectileLifespan = 1200;
+                    break;
+                case 'meter_maid':
+                    this.projectileDamage = 10;
+                    this.projectileSpeed = 280;
+                    this.projectileLifespan = 1500;
+                    break;
+                case 'street_preacher':
+                    this.projectileDamage = 14;
+                    this.projectileSpeed = 240;
+                    this.projectileLifespan = 1200;
+                    break;
+                case 'off_duty_cop':
+                    this.projectileDamage = 22;
+                    this.projectileSpeed = 500; // Very fast taser
+                    this.projectileLifespan = 1000;
+                    break;
+                default:
+                    // Use default values from the parent class
+                    break;
+            }
+            
             this.initAutoShooting();
         }
     }
@@ -109,85 +182,6 @@ export class EnemySprite extends EntitySprite {
         }
     }
 
-    static generateEnemyTexture(scene: Phaser.Scene, textureKey: string, enemyType: string, width: number, height: number): void {
-        const canvas = scene.textures.createCanvas(textureKey, width, height);
-        if (!canvas) {
-            console.error(`EnemySprite: Failed to create canvas texture for ${textureKey}.`);
-            return;
-        }
-        const ctx = canvas.context;
-        const W = width;
-        const H = height;
-        const centerX = W / 2;
-        const centerY = H / 2;
-        const baseRadius = Math.min(W, H) / 2.2;
-
-        switch (enemyType) {
-            case 'slime': {
-                const bodyGradient = ctx.createRadialGradient(centerX - W * 0.1, centerY - H * 0.1, baseRadius * 0.2, centerX, centerY, baseRadius);
-                bodyGradient.addColorStop(0, 'rgba(100, 255, 150, 0.7)');
-                bodyGradient.addColorStop(1, 'rgba(0, 180, 50, 0.8)');
-                ctx.fillStyle = bodyGradient;
-                ctx.beginPath();
-                ctx.moveTo(centerX + baseRadius, centerY);
-                for (let i = 1; i <= 16; i++) {
-                    const angle = (i / 16) * Math.PI * 2;
-                    const radiusVariation = baseRadius * (1 + (Math.sin(angle * 3 + i) * 0.07));
-                    ctx.lineTo(centerX + radiusVariation * Math.cos(angle), centerY + radiusVariation * Math.sin(angle));
-                }
-                ctx.closePath();
-                ctx.fill();
-
-                const highlight1Gradient = ctx.createRadialGradient(centerX - W * 0.15, centerY - H * 0.25, baseRadius * 0.05, centerX - W*0.1, centerY - H*0.1, baseRadius * 0.35);
-                highlight1Gradient.addColorStop(0, 'rgba(220, 255, 220, 0.8)');
-                highlight1Gradient.addColorStop(1, 'rgba(200, 255, 200, 0)');
-                ctx.fillStyle = highlight1Gradient;
-                ctx.beginPath();
-                ctx.ellipse(centerX - W * 0.12, centerY - H * 0.18, baseRadius * 0.4, baseRadius * 0.25, Math.PI / 4, 0, Math.PI * 2);
-                ctx.fill();
-
-                const highlight2Gradient = ctx.createRadialGradient(centerX + W * 0.2, centerY - H * 0.15, baseRadius * 0.02, centerX + W*0.15, centerY - H*0.1, baseRadius * 0.2);
-                highlight2Gradient.addColorStop(0, 'rgba(200, 255, 200, 0.6)');
-                highlight2Gradient.addColorStop(1, 'rgba(180, 255, 180, 0)');
-                ctx.fillStyle = highlight2Gradient;
-                ctx.beginPath();
-                ctx.ellipse(centerX + W * 0.18, centerY - H * 0.12, baseRadius * 0.25, baseRadius * 0.15, -Math.PI / 6, 0, Math.PI * 2);
-                ctx.fill();
-
-                const coreGradient = ctx.createRadialGradient(centerX + W * 0.05, centerY + H * 0.05, baseRadius * 0.1, centerX, centerY, baseRadius * 0.8);
-                coreGradient.addColorStop(0, 'rgba(0, 80, 20, 0.6)');
-                coreGradient.addColorStop(1, 'rgba(0, 120, 30, 0.2)');
-                ctx.fillStyle = coreGradient;
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, baseRadius * 0.75, 0, Math.PI * 2);
-                ctx.fill();
-
-                const numBubbles = 3 + Math.floor(Math.random() * 3);
-                for (let i = 0; i < numBubbles; i++) {
-                    const bubbleRadius = baseRadius * (0.05 + Math.random() * 0.1);
-                    const angle = Math.random() * Math.PI * 2;
-                    const distFromCenter = Math.random() * baseRadius * 0.5;
-                    const bx = centerX + Math.cos(angle) * distFromCenter;
-                    const by = centerY + Math.sin(angle) * distFromCenter;
-                    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(50, 150, 80, 0.7)' : 'rgba(150, 220, 180, 0.6)';
-                    ctx.beginPath();
-                    ctx.arc(bx, by, bubbleRadius, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                break;
-            }
-            case 'goblin':
-                ctx.fillStyle = '#8B4513'; // Brown for goblin
-                ctx.fillRect(0, 0, W, H);
-                // TODO: Add more detailed goblin texture later if needed
-                break;
-            default:
-                ctx.fillStyle = '#FF00FF'; // Default magenta
-                ctx.fillRect(0, 0, W, H);
-        }
-        canvas.refresh();
-    }
-
     update(time: number, delta: number): void {
         if (!this.active || !this.targetPlayer?.active) {
             if (this.body instanceof Phaser.Physics.Arcade.Body) {
@@ -202,34 +196,185 @@ export class EnemySprite extends EntitySprite {
         const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
 
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
-            if (this.isRanged) {
-                // Ranged enemy behavior
-                if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8 && distanceToPlayer <= this.rangedAttackRange * 1.5) {
-                    this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
-                    this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
-                } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 1.5) {
-                    this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
-                    this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
-                } else {
-                    this.body.setVelocity(0, 0);
-                }
-
-                // Shooting is now handled by the timer-based auto-shooting system
-            } else {
-                // Melee enemy behavior (original logic)
-                if (distanceToPlayer > this.meleeAttackRange) {
-                    // Move towards player
-                    this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
-                    this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
-                } else {
-                    // Close enough to attack (melee)
-                    this.body.setVelocity(0, 0); // Stop moving
-                    // Use separate melee attack timer
-                    if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
-                        this.performMeleeAttack();
-                        this.lastMeleeAttackTime = time;
+            // Apply enemy-specific behavior based on type
+            switch (this.enemyType) {
+                case 'caffeine_rookie':
+                    // Erratic movement, speeds up after misses
+                    if (time % 1000 < 500) {
+                        const jitterAngle = angleToPlayer + (Math.random() * 0.5 - 0.25);
+                        this.body.setVelocityX(Math.cos(jitterAngle) * this.maxSpeed * 1.2);
+                        this.body.setVelocityY(Math.sin(jitterAngle) * this.maxSpeed * 1.2);
+                    } else {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
                     }
-                }
+                    break;
+                    
+                case 'tax_man':
+                    // Moves slower but deals more damage
+                    if (distanceToPlayer > this.meleeAttackRange) {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.8);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.8);
+                    } else {
+                        this.body.setVelocity(0, 0);
+                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                            this.performMeleeAttack();
+                            this.lastMeleeAttackTime = time;
+                        }
+                    }
+                    break;
+                    
+                case 'repo_agent':
+                    // Tries to hook player and drag them
+                    if (distanceToPlayer > this.meleeAttackRange * 1.5) {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.1);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.1);
+                    } else if (distanceToPlayer > this.meleeAttackRange) {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.5);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.5);
+                    } else {
+                        this.body.setVelocity(0, 0);
+                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                            this.performMeleeAttack();
+                            this.lastMeleeAttackTime = time;
+                        }
+                    }
+                    break;
+                    
+                case 'guard_dog':
+                    // Very fast movement
+                    if (distanceToPlayer > this.meleeAttackRange) {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.3);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.3);
+                    } else {
+                        this.body.setVelocity(0, 0);
+                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                            this.performMeleeAttack();
+                            this.lastMeleeAttackTime = time;
+                        }
+                    }
+                    break;
+                    
+                case 'bouncer':
+                    // Slow but powerful
+                    if (distanceToPlayer > this.meleeAttackRange * 1.2) {
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
+                    } else {
+                        this.body.setVelocity(0, 0);
+                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                            this.performMeleeAttack();
+                            this.lastMeleeAttackTime = time;
+                        }
+                    }
+                    break;
+                    
+                case 'court_runner':
+                    // Very fast, tries to tag player and then runs away briefly
+                    if (distanceToPlayer > this.meleeAttackRange) {
+                        // Run toward player at high speed
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 1.4);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 1.4);
+                    } else {
+                        // After attack, run away briefly
+                        if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                            this.performMeleeAttack();
+                            this.lastMeleeAttackTime = time;
+                            
+                            // Run away after attacking
+                            this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed);
+                            this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed);
+                        } else {
+                            // Stay still briefly after attack
+                            this.body.setVelocity(0, 0);
+                        }
+                    }
+                    break;
+                    
+                case 'meter_maid':
+                    // Keeps medium distance and shoots tickets
+                    if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.6) {
+                        // Too close, back away
+                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed * 0.8);
+                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed * 0.8);
+                    } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.9) {
+                        // Too far, approach
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.6);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.6);
+                    } else {
+                        // In ideal range, stay still to shoot
+                        this.body.setVelocity(0, 0);
+                    }
+                    break;
+                    
+                case 'street_preacher':
+                    // Slow but long range shouts
+                    if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.5) {
+                        // Too close, back away
+                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed * 0.9);
+                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed * 0.9);
+                    } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.9) {
+                        // Too far, approach
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
+                    } else {
+                        // In ideal range, stay still to shoot
+                        this.body.setVelocity(0, 0);
+                    }
+                    break;
+                    
+                case 'off_duty_cop':
+                    // Strategic movement, maintains medium distance
+                    if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8) {
+                        // Approach at medium speed
+                        this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.9);
+                        this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.9);
+                    } else if (this.rangedAttackRange && distanceToPlayer < this.rangedAttackRange * 0.3) {
+                        // Too close, back away quickly
+                        this.body.setVelocityX(-Math.cos(angleToPlayer) * this.maxSpeed);
+                        this.body.setVelocityY(-Math.sin(angleToPlayer) * this.maxSpeed);
+                    } else {
+                        // Strafe sideways for harder-to-hit target
+                        const strafeAngle = angleToPlayer + Math.PI / 2;
+                        if (time % 4000 < 2000) {
+                            this.body.setVelocityX(Math.cos(strafeAngle) * this.maxSpeed * 0.6);
+                            this.body.setVelocityY(Math.sin(strafeAngle) * this.maxSpeed * 0.6);
+                        } else {
+                            this.body.setVelocityX(Math.cos(strafeAngle) * this.maxSpeed * -0.6);
+                            this.body.setVelocityY(Math.sin(strafeAngle) * this.maxSpeed * -0.6);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    // Default behavior for other enemies
+                    if (this.isRanged) {
+                        // Ranged enemy behavior
+                        if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 0.8 && distanceToPlayer <= this.rangedAttackRange * 1.5) {
+                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed * 0.7);
+                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed * 0.7);
+                        } else if (this.rangedAttackRange && distanceToPlayer > this.rangedAttackRange * 1.5) {
+                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
+                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
+                        } else {
+                            this.body.setVelocity(0, 0);
+                        }
+                    } else {
+                        // Melee enemy behavior (original logic)
+                        if (distanceToPlayer > this.meleeAttackRange) {
+                            // Move towards player
+                            this.body.setVelocityX(Math.cos(angleToPlayer) * this.maxSpeed);
+                            this.body.setVelocityY(Math.sin(angleToPlayer) * this.maxSpeed);
+                        } else {
+                            // Close enough to attack (melee)
+                            this.body.setVelocity(0, 0); // Stop moving
+                            // Use separate melee attack timer
+                            if (time > this.lastMeleeAttackTime + this.shootCooldown) { 
+                                this.performMeleeAttack();
+                                this.lastMeleeAttackTime = time;
+                            }
+                        }
+                    }
             }
         }
 

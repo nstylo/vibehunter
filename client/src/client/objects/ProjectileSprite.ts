@@ -5,8 +5,13 @@ import PROJECTILE_DEFINITIONS from '../definitions/projectiles.json'; // Import 
 export enum ProjectileType {
   BULLET = 'BULLET',
   LASER = 'LASER', // Not yet in JSON, will need definition if used
-  FIREBALL = 'FIREBALL',
-  // Add more types as needed
+  PEPPER_SPRAY = 'PEPPER_SPRAY',
+  PUDDLE = 'PUDDLE',
+  SYRINGE = 'SYRINGE',
+  FLAME = 'FLAME',
+  TICKET = 'TICKET',
+  SHOUT = 'SHOUT',
+  TASER = 'TASER'
 }
 
 interface ProjectileDefinition {

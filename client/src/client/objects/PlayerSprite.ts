@@ -4,6 +4,7 @@ import type { EnemySprite } from './EnemySprite';
 import { type IPlayerStats, DEFAULT_PLAYER_STATS } from '../../common/PlayerStats';
 import type NetworkSystem from '../systems/NetworkSystem'
 import type { NetworkAware } from '../types/multiplayer';
+import type { ParticleSystem } from '../systems/ParticleSystem';
 
 const CHARACTER_SPRITE_KEYS = [
     'character_front_1', 'character_front_2', 'character_front_3', 'character_front_4',
@@ -62,7 +63,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private keyS: Phaser.Input.Keyboard.Key | undefined;
     private keyD: Phaser.Input.Keyboard.Key | undefined;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, playerId: string) {
+    constructor(scene: Phaser.Scene, x: number, y: number, playerId: string, particleSystem?: ParticleSystem) {
         // Select a random sprite key
         const randomSpriteKey = Phaser.Math.RND.pick(CHARACTER_SPRITE_KEYS);
 
@@ -70,7 +71,9 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         super(scene, x, y, randomSpriteKey, playerId,
             DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
             DEFAULT_PLAYER_STATS.maxHealth, // Use from DEFAULT_PLAYER_STATS
-            DEFAULT_PLAYER_STATS.movementSpeed); // Use from DEFAULT_PLAYER_STATS
+            DEFAULT_PLAYER_STATS.movementSpeed, // Use from DEFAULT_PLAYER_STATS
+            particleSystem // Pass particle system to base class
+            );
         this.playerId = playerId; // entityId from EntitySprite is already set to playerId by super call
         this.dashCooldown = 0; // Default dash cooldown
         this.accelerationFactor = 0.1; // Default acceleration factor
@@ -112,6 +115,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
         // Listen for stat updates from ProgressionSystem
         this.scene.events.on('playerStatsUpdated', this.updateStats, this);
+        this.playerPhysicsHeight = PLAYER_PHYSICS_HEIGHT; // Set the correct physics height for footstep calculation
     }
 
     public updateStats(newStats: IPlayerStats): void {

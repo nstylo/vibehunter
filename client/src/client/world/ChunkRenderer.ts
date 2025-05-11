@@ -75,7 +75,7 @@ export class ChunkRenderer {
                 const cell = row[x];
                 if (cell === undefined) {
                     console.warn(`ChunkRenderer: Undefined cell at (${x},${y}), defaulting to empty.`);
-                    this.tilemapLayer.putTileAt(getTileIndexForCellType(CellType.EMPTY), x, y);
+                    this.tilemapLayer.putTileAt(getTileIndexForCellType(CellType.EMPTY_GROUND), x, y);
                     continue;
                 }
                 const tileIndex = getTileIndexForCellType(cell);

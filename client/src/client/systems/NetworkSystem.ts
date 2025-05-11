@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { type ServerMessage } from '../types/multiplayer';
+import type { ServerMessage } from '../types/multiplayer';
 
 export default class NetworkSystem extends Phaser.Events.EventEmitter {
     private socket: WebSocket | null = null;

@@ -1,0 +1,44 @@
+[
+    {
+        "id": "SLOW_TIER_1",
+        "type": "SLOW_EFFECT", 
+        "name": "Slowed",
+        "description": "Movement speed reduced by 30%.",
+        "duration": 5000, 
+        "canStack": false,
+        "iconAssetKey": "status_icon_slow", 
+        "statModifiers": {
+            "maxSpeed": 0.7 
+        },
+        "behavioralFlags": {}
+    },
+    {
+        "id": "POISON_DOT_TIER_1",
+        "type": "DAMAGE_OVER_TIME_EFFECT",
+        "name": "Poisoned",
+        "description": "Taking 5 damage per second.",
+        "duration": 3000,
+        "tickRate": 1000,
+        "canStack": true,
+        "maxStacks": 3,
+        "iconAssetKey": "status_icon_poison",
+        "statModifiers": {},
+        "behavioralFlags": {},
+        "customData": { 
+            "damagePerTick": 5
+        }
+    },
+    {
+        "id": "STUN_SHORT",
+        "type": "STUN_EFFECT",
+        "name": "Stunned",
+        "description": "Cannot move or act.",
+        "duration": 1500,
+        "canStack": false,
+        "iconAssetKey": "status_icon_stun",
+        "statModifiers": {},
+        "behavioralFlags": {
+            "isStunned": true
+        }
+    }
+] 

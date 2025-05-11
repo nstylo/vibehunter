@@ -6,9 +6,10 @@ import { generateInitialSeed } from '../../common/world'; // For a default seed
 import { PlayerSprite } from '../objects/PlayerSprite'; // Changed to named import
 import { EnemySprite } from '../objects/EnemySprite'; // Import EnemySprite
 import ProjectileSprite, { ProjectileType } from '../objects/ProjectileSprite'; // Import ProjectileSprite and its enum
+import { XpOrb } from '../objects/XpOrb'; // Import the new XpOrb class
 import type { EntitySprite } from '../objects/EntitySprite'; // Changed to type-only import
 import { EnemySpawner, type WaveDefinition } from '../systems/EnemySpawner'; // Updated import
-import NetworkSystem from '../systems/NetworkSystem'; // Import NetworkSystem
+import NetworkSystem from '../systems/NetworkSystem';
 import {
     EVENT_ENTITY_SHOOT_PROJECTILE,
     EVENT_PROJECTILE_SPAWNED,
@@ -20,6 +21,7 @@ import { ProgressionSystem } from '../systems/ProgressionSystem'; // Import Prog
 import { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } from '../types/multiplayer'; // Import multiplayer types
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
+import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -66,9 +68,21 @@ export class GameScene extends Phaser.Scene {
     cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
     private enemies!: Phaser.Physics.Arcade.Group; // Enemy group
     private projectiles!: Phaser.Physics.Arcade.Group; // Projectile group
+    private xpOrbs!: Phaser.Physics.Arcade.Group; // Group for XP orbs
     private enemySpawner!: EnemySpawner; // Added EnemySpawner property
     private progressionSystem!: ProgressionSystem; // Add progressionSystem property
     private particleSystem!: ParticleSystem; // Added particle system member
+
+    // Camera zoom properties
+    private currentZoom = 1;
+    private targetZoom = 1;
+    private minZoom = 0.5;
+    private maxZoom = 2;
+    private zoomFactor = 0.1;
+    private zoomDuration = 50; // Duration of zoom animation in ms
+    private currentZoomTween: Phaser.Tweens.Tween | null = null;
+    private keyZoomIn!: Phaser.Input.Keyboard.Key;
+    private keyZoomOut!: Phaser.Input.Keyboard.Key;
 
     // Network related members
     private networkSystem: NetworkSystem | null = null;
@@ -104,10 +118,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     preload() {
+        // Preload enemy textures based on definitions
+        for (const enemyDef of GAME_ENEMY_DEFINITIONS) {
+            if (enemyDef.assetUrl && !this.textures.exists(enemyDef.assetUrl)) {
+                // enemyDef.assetUrl is now the ID string (e.g., "1")
+                // This ID string will also be the texture key
+                const textureKey = enemyDef.assetUrl;
+                const filePath = `assets/enemies/${enemyDef.assetUrl}.png`; // e.g., assets/enemies/1.png
+                this.load.image(textureKey, filePath);
+            } else if (!enemyDef.assetUrl) {
+                console.warn(`Enemy definition for '${enemyDef.name}' is missing assetUrl.`);
+            }
+        }
     }
 
     create(data: GameSceneData) {
         this.chunkRenderer = new ChunkRenderer(this, this.worldGen);
+
+        // Create the dynamic XP orb texture
+        this.createXpOrbTexture();
 
         // Instantiate ParticleSystem early
         this.particleSystem = new ParticleSystem(this); // Instantiated ParticleSystem
@@ -126,7 +155,7 @@ export class GameScene extends Phaser.Scene {
         // Initialize player BEFORE setting up collision
         const playerX = data.initialPosition?.x ?? worldPixelWidth / 2;
         const playerY = data.initialPosition?.y ?? worldPixelHeight / 2;
-        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer');
+        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', this.particleSystem);
 
         // Configure player network mode if multiplayer
         if (this.isMultiplayer && this.networkSystem && this.player) {
@@ -143,6 +172,12 @@ export class GameScene extends Phaser.Scene {
         this.projectiles = this.physics.add.group({
             classType: ProjectileSprite,
             runChildUpdate: true // ProjectileSprite's preUpdate handles lifespan
+        });
+
+        // Initialize XP Orbs group
+        this.xpOrbs = this.physics.add.group({
+            classType: XpOrb, // Use the XpOrb class
+            runChildUpdate: true // Ensure XpOrb's preUpdate is called
         });
 
         // Setup Enemy Spawner
@@ -173,6 +208,8 @@ export class GameScene extends Phaser.Scene {
         if (this.player) {
             this.physics.add.overlap(this.projectiles, this.enemies, this.handleProjectileHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
             this.physics.add.overlap(this.projectiles, this.player, this.handleProjectileHitPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+            // Add collision for player and XP orbs
+            this.physics.add.overlap(this.player, this.xpOrbs, this.handlePlayerCollectXpOrb as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
         }
 
         // Collision between enemies themselves (to prevent clumping)
@@ -180,11 +217,27 @@ export class GameScene extends Phaser.Scene {
 
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
+            
+            // Add zoom key bindings
+            this.keyZoomIn = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.PLUS);
+            this.keyZoomOut = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS);
         }
 
         this.cameras.main.startFollow(this.player, true, 1, 1);
         this.cameras.main.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
         this.cameras.main.roundPixels = true; // For smoother, pixel-perfect camera movement
+        
+        // Set initial zoom
+        this.cameras.main.setZoom(this.currentZoom);
+
+        // Setup mousewheel zoom
+        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[], deltaX: number, deltaY: number, deltaZ: number) => {
+            if (deltaY > 0) {
+                this.zoomOut();
+            } else if (deltaY < 0) {
+                this.zoomIn();
+            }
+        });
 
         // Launch the HUD Scene
         this.scene.launch('HudScene');
@@ -200,8 +253,8 @@ export class GameScene extends Phaser.Scene {
         // Set initial HUD values
         if (this.player) {
             this.game.events.emit('updateHud', {
-                hp: this.player.hp,
-                maxHp: this.player.maxHp,
+                hp: this.player.currentStats.hp,
+                maxHp: this.player.currentStats.maxHp,
                 currentXp: 0,
                 nextLevelXp: 100
             });
@@ -216,53 +269,58 @@ export class GameScene extends Phaser.Scene {
         this.events.on('xpUpdated', (data: { currentXP: number, currentLevel: number, xpToNextLevel: number }) => {
             this.game.events.emit('updateHud', {
                 currentXp: data.currentXP,
-                nextLevelXp: data.xpToNextLevel
+                nextLevelXp: data.xpToNextLevel,
+                level: data.currentLevel // Ensure level is passed to HUD
             });
         });
 
         this.events.on('playerLevelUp', (data: { newLevel: number }) => {
             // This is handled by ProgressionSystem opening the upgrade UI
             // We could add a visual effect here if desired
+            // Ensure HUD is updated with the new level if not already covered by xpUpdated
+             this.game.events.emit('updateHud', { level: data.newLevel });
         });
 
         // Event Listeners
         this.events.on(EVENT_ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
         this.events.on(EVENT_ENTITY_DIED, (payload: { entity: EntitySprite, killer?: EntitySprite | ProjectileSprite | string }) => {
-            // Notify EnemySpawner if an EnemySprite died
             if (payload.entity instanceof EnemySprite && this.enemySpawner) {
                 this.enemySpawner.notifyEnemyDefeated(payload.entity as EnemySprite);
-
-                // If the player killed the enemy, award XP via the progression system
                 if (payload.killer instanceof ProjectileSprite &&
                     this.player &&
                     payload.killer.ownerId === this.player.entityId) {
-
-                    // Emit enemyKilled event for progressionSystem to handle XP rewards
-                    // The amount could vary based on enemy type
-                    const xpAmount = payload.entity.xpValue || 10; // Default 10 XP if not specified
-                    this.events.emit('enemyKilled', { amount: xpAmount, enemy: payload.entity });
+                    // Use currentStats or baseStats for xpValue, with a fallback
+                    const xpAmount = (payload.entity as EnemySprite).currentStats.xpValue ?? (payload.entity as EnemySprite).baseStats.xpValue ?? 10;
+                    // Instead of emitting 'enemyKilled' for XP, spawn orbs
+                    this.spawnXpOrbs(payload.entity.x, payload.entity.y, xpAmount);
+                    // We might still want an 'enemyKilled' event for other purposes (e.g. quests, stats)
+                    // For now, focusing on XP orb change.
+                    // this.events.emit('enemyKilled', { amount: xpAmount, enemy: payload.entity });
                 }
             } else if (payload.entity instanceof PlayerSprite && payload.entity === this.player) {
-                // Player died, transition to GameOverScene
-                const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() - 1 : 0; // Get waves survived
-
-                this.scene.stop('HudScene'); // Stop HUD
-                this.scene.stop(this.scene.key); // Stop current scene (GameScene)
+                const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() - 1 : 0; 
+                this.scene.stop('HudScene'); 
+                this.scene.stop(this.scene.key); 
                 this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived });
             }
         });
 
         this.events.on(EVENT_ENTITY_TAKE_DAMAGE, (payload: { target: EntitySprite, damage: number, newHp: number, source?: EntitySprite | ProjectileSprite | string }) => {
-
-            // If player took damage, update HUD
             if (payload.target instanceof PlayerSprite && this.player === payload.target) {
                 this.game.events.emit('updateHud', {
                     hp: payload.newHp,
-                    maxHp: this.player.maxHp
+                    maxHp: this.player.currentStats.maxHp
                 });
             }
         });
         this.events.on(EVENT_PROJECTILE_SPAWNED, (payload: { projectile: ProjectileSprite, ownerId: string }) => {
+        });
+
+        // Listen for XP orb collection to pass XP to ProgressionSystem
+        this.events.on('xpOrbCollected', (data: { amount: number }) => {
+            if (this.progressionSystem) {
+                this.progressionSystem.addXp(data.amount);
+            }
         });
 
         // Listen to EnemySpawner events for logging (and later UI)
@@ -298,27 +356,45 @@ export class GameScene extends Phaser.Scene {
 
     private handleEntityShoot(payload: {
         shooter: EntitySprite,
-        ownerId: string,
         projectileType: string,
         direction: Phaser.Math.Vector2,
         targetPosition?: Phaser.Math.Vector2
     }): void {
-        const { shooter, ownerId, projectileType, direction, targetPosition } = payload;
+        const { shooter, projectileType, direction } = payload; 
 
-        // Determine projectile type from string
         const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
+
+        let spawnOffsetMagnitude: number;
+        let projectileScale: number | undefined = undefined;
+
+        if (shooter instanceof PlayerSprite) {
+            spawnOffsetMagnitude = 37;
+            projectileScale = shooter.getProjectileScale();
+        } else if (shooter instanceof EnemySprite) {
+            const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
+            const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
+            spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
+        } else {
+            const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
+            const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
+            spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
+        }
+
+        // Use shooter's currentStats for projectile properties, with fallbacks from EntitySprite defaults if needed
+        const damage = shooter.currentStats.projectileDamage ?? 10;
+        const speed = shooter.currentStats.projectileSpeed ?? 300;
 
         const projectile = new ProjectileSprite(
             this,
-            shooter.x + direction.x * (shooter.width / 2 + 10), // Spawn slightly in front
-            shooter.y + direction.y * (shooter.height / 2 + 10),
+            shooter.x + direction.x * spawnOffsetMagnitude,
+            shooter.y + direction.y * spawnOffsetMagnitude, 
             pType,
-            ownerId,
-            shooter.projectileDamage, // Use damage from shooter
-            shooter.projectileSpeed,  // Use speed from shooter
-            shooter.projectileLifespan, // Use lifespan from shooter
-            undefined, // Scale (optional, could be from shooter too)
-            this.particleSystem // Pass particle system
+            shooter.entityId,
+            damage, 
+            speed,  
+            shooter.projectileLifespan, 
+            projectileScale, 
+            this.particleSystem 
         );
 
         this.projectiles.add(projectile);
@@ -326,7 +402,7 @@ export class GameScene extends Phaser.Scene {
             projectile.body.setVelocity(direction.x * projectile.speed, direction.y * projectile.speed);
         }
 
-        this.events.emit(EVENT_PROJECTILE_SPAWNED, { projectile, ownerId });
+        this.events.emit(EVENT_PROJECTILE_SPAWNED, { projectile, ownerId: shooter.entityId });
     }
 
     private handleProjectileHitEnemy(obj1: Phaser.Types.Physics.Arcade.GameObjectWithBody, obj2: Phaser.Types.Physics.Arcade.GameObjectWithBody): void {
@@ -376,9 +452,108 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private handlePlayerCollectXpOrb(
+        playerObject: Phaser.Types.Physics.Arcade.GameObjectWithBody,
+        orbObject: Phaser.Types.Physics.Arcade.GameObjectWithBody
+    ): void {
+        const player = playerObject as PlayerSprite; 
+        const orb = orbObject as XpOrb; // Cast to XpOrb
+
+        if (!orb.active || !orb.body || !this.player) return; // Orb already collected, no body, or player missing
+
+        const xpValue = orb.xpValue; // Access directly from XpOrb property
+
+        if (typeof xpValue === 'number' && xpValue > 0) { // Only process if there is XP to gain
+            this.events.emit('xpOrbCollected', { amount: xpValue });
+
+            // Display floating XP text
+            this.showFloatingText(`+${xpValue} XP`, this.player.x, this.player.y - this.player.displayHeight / 2, '#FFD700'); // Gold color for XP
+
+            if (this.particleSystem) {
+                // this.particleSystem.playXpOrbCollect(orb.x, orb.y); // TODO: Implement in ParticleSystem
+            }
+            orb.destroy();
+        } else {
+            if (xpValue === 0) {
+                // Silently destroy 0-value orbs if they somehow get created and collected
+                orb.destroy();
+            } else {
+                console.warn('XP Orb collected without xpValue data or invalid data.');
+                orb.destroy(); // Still remove it
+            }
+        }
+    }
+
+    private showFloatingText(text: string, x: number, y: number, color: string, fontSize: string = '16px'): void {
+        const randomXOffset = Phaser.Math.Between(-15, 15);
+        const textObject = this.add.text(x + randomXOffset, y, text, {
+            fontFamily: 'Arial', // Using a pixel-art friendly font if available
+            fontSize: fontSize,
+            color: color,
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        textObject.setOrigin(0.5, 1); // Origin at bottom-center for upward float
+        textObject.setDepth(1000); // Ensure it's above other game elements
+
+        this.tweens.add({
+            targets: textObject,
+            y: y - 50, // Float upwards by 50 pixels
+            alpha: 0,  // Fade out
+            duration: 1200, // Duration of 1.2 seconds
+            ease: 'Power1',
+            onComplete: () => {
+                textObject.destroy();
+            }
+        });
+    }
+
+    private zoomIn(): void {
+        if (this.targetZoom < this.maxZoom) {
+            this.targetZoom = Math.min(this.maxZoom, this.targetZoom + this.zoomFactor);
+            this.smoothZoom(this.targetZoom);
+        }
+    }
+
+    private zoomOut(): void {
+        if (this.targetZoom > this.minZoom) {
+            this.targetZoom = Math.max(this.minZoom, this.targetZoom - this.zoomFactor);
+            this.smoothZoom(this.targetZoom);
+        }
+    }
+
+    private smoothZoom(targetZoom: number): void {
+        // Stop any existing zoom tween
+        if (this.currentZoomTween) {
+            this.currentZoomTween.stop();
+        }
+
+        // Create a new tween to smoothly transition to the target zoom
+        this.currentZoomTween = this.tweens.add({
+            targets: this.cameras.main,
+            zoom: targetZoom,
+            duration: this.zoomDuration,
+            ease: 'Sine.easeInOut',
+            onUpdate: () => {
+                this.currentZoom = this.cameras.main.zoom;
+            },
+            onComplete: () => {
+                this.currentZoom = targetZoom;
+                this.currentZoomTween = null;
+            }
+        });
+    }
+
     update(time: number, delta: number) {
         if (!this.player || !this.cursors || !this.player.body) {
             return;
+        }
+
+        // Handle keyboard zoom controls
+        if (Phaser.Input.Keyboard.JustDown(this.keyZoomIn)) {
+            this.zoomIn();
+        } else if (Phaser.Input.Keyboard.JustDown(this.keyZoomOut)) {
+            this.zoomOut();
         }
 
         // Update player movement - just handles input and movement
@@ -411,6 +586,42 @@ export class GameScene extends Phaser.Scene {
         for (const remotePlayer of this.remotePlayers.values()) {
             remotePlayer.setDepth(remotePlayer.y + remotePlayer.displayHeight / 2);
         }
+        
+        // Send enemy positions to HUD for indicators
+        this.updateEnemyIndicators();
+    }
+
+    // Add this new method to update enemy indicators
+    private updateEnemyIndicators(): void {
+        // Only update if enemies exist and the HUD scene is active
+        if (!this.enemies || !this.enemies.getLength() || !this.scene.isActive('HudScene')) {
+            return;
+        }
+        
+        const cam = this.cameras.main;
+        const enemyData = [];
+        
+        // Collect data about all enemies
+        for (const enemy of this.enemies.getChildren()) {
+            if (enemy instanceof Phaser.GameObjects.Sprite && enemy.active) {
+                // Cast to EnemySprite to access entityId
+                const enemySprite = enemy as EnemySprite;
+                enemyData.push({
+                    id: enemySprite.entityId || `enemy_${enemy.x}_${enemy.y}`,
+                    worldX: enemy.x,
+                    worldY: enemy.y
+                });
+            }
+        }
+        
+        // Emit event to update HUD indicators with enemy and camera information
+        this.game.events.emit('updateEnemyIndicators', {
+            enemies: enemyData,
+            cameraX: cam.worldView.x,
+            cameraY: cam.worldView.y,
+            cameraWidth: cam.width,
+            cameraHeight: cam.height
+        });
     }
 
     // Add shutdown method for cleanup
@@ -447,8 +658,6 @@ export class GameScene extends Phaser.Scene {
             this.cursorHideTimer.remove(false);
             this.cursorHideTimer = undefined;
         }
-
-        console.log('GameScene shutdown complete.');
     }
 
     /**
@@ -508,7 +717,7 @@ export class GameScene extends Phaser.Scene {
 
         if (!remotePlayer) {
             // Create new remote player sprite
-            remotePlayer = new PlayerSprite(this, position.x, position.y, id);
+            remotePlayer = new PlayerSprite(this, position.x, position.y, id, this.particleSystem);
 
             // Mark as network controlled
             if (this.networkSystem) {
@@ -547,5 +756,106 @@ export class GameScene extends Phaser.Scene {
                 this.game.canvas.style.cursor = 'none';
             }
         }, [], this);
+    }
+
+    private spawnXpOrbs(x: number, y: number, totalXpValue: number): void {
+        if (!this.player) return; // Ensure player exists
+        if (totalXpValue <= 0) return; // No XP to spawn
+
+        const DYNAMIC_ORB_TEXTURE_KEY = 'xp_orb_dynamic';
+        const numOrbsToSpawn = Phaser.Math.Between(3, 5); // Spawn 3 to 5 orbs
+        const baseXpValuePerOrb = Math.floor(totalXpValue / numOrbsToSpawn);
+        let remainderXp = totalXpValue % numOrbsToSpawn;
+
+        for (let i = 0; i < numOrbsToSpawn; i++) {
+            let currentOrbXp = baseXpValuePerOrb;
+            if (remainderXp > 0) {
+                currentOrbXp++;
+                remainderXp--;
+            }
+
+            if (currentOrbXp <= 0 && numOrbsToSpawn === 1 && totalXpValue > 0) {
+                // Ensure at least 1 XP if totalXpValue was positive but got lost in division for a single orb
+                currentOrbXp = 1; 
+            } else if (currentOrbXp <= 0 && totalXpValue > 0) {
+                // If an orb ends up with 0 xp due to division, but there was total XP,
+                // skip creating this 0-value orb unless it's the only one meant to carry all XP.
+                // This check helps avoid spawning 0xp orbs if totalXp is small (e.g. 2xp, 3 orbs)
+                // The first few orbs will get 1xp each due to remainder distribution in that case.
+                if (baseXpValuePerOrb === 0) continue; 
+            }
+
+
+            // Create the orb using the new XpOrb class
+            const orb = new XpOrb(this, x, y, DYNAMIC_ORB_TEXTURE_KEY, currentOrbXp, this.player);
+            this.xpOrbs.add(orb);
+
+            // Optional: make orbs fly out a bit, each with a slightly different trajectory
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const distance = Phaser.Math.FloatBetween(25, 60); // Slightly larger spread
+            const targetX = x + Math.cos(angle) * distance;
+            const targetY = y + Math.sin(angle) * distance;
+
+            orb.initialBurst(targetX, targetY);
+
+            if (this.particleSystem) {
+                // this.particleSystem.playXpOrbSpawn(orb.x, orb.y);
+            }
+        }
+    }
+
+    private createXpOrbTexture(): void {
+        const key = 'xp_orb_dynamic';
+        const size = 32; // Texture size (diameter of the orb)
+        const glowPadding = 4; // Extra padding for the glow effect
+        const canvasSize = size + glowPadding * 2; // Canvas needs to be larger to accommodate glow
+
+        if (this.textures.exists(key)) {
+            return; // Texture already created
+        }
+
+        const canvasTexture = this.textures.createCanvas(key, canvasSize, canvasSize);
+        if (!canvasTexture) return;
+
+        const ctx = canvasTexture.context;
+        const centerX = canvasSize / 2;
+        const centerY = canvasSize / 2;
+        const orbRadius = size / 2 - 1; // Orb radius, -1 to keep it slightly smaller than original texture box
+
+        // Green orb colors
+        const baseColor = '#4CAF50'; // Green 500
+        const highlightColor = '#A5D6A7'; // Green 200 (lighter)
+        const shadowColor = '#2E7D32'; // Green 800 (darker)
+        const glowColor = 'rgba(76, 175, 80, 0.6)'; // Semi-transparent base green for glow
+        const intenseGlowColor = 'rgba(165, 214, 167, 0.3)'; // Lighter, more transparent glow
+
+        // Draw the glow effect first
+        ctx.beginPath();
+        const glowGradient = ctx.createRadialGradient(centerX, centerY, orbRadius * 0.5, centerX, centerY, orbRadius + glowPadding);
+        glowGradient.addColorStop(0, intenseGlowColor); // More intense glow closer to the orb
+        glowGradient.addColorStop(0.7, glowColor);
+        glowGradient.addColorStop(1, 'rgba(76, 175, 80, 0)'); // Fade to transparent
+        ctx.fillStyle = glowGradient;
+        ctx.arc(centerX, centerY, orbRadius + glowPadding, 0, Math.PI * 2, false);
+        ctx.fill();
+
+        // Main orb body with radial gradient for 3D effect (drawn on top of the glow)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, orbRadius, 0, Math.PI * 2, false);
+        const orbGradient = ctx.createRadialGradient(centerX - orbRadius / 3, centerY - orbRadius / 3, 0, centerX, centerY, orbRadius);
+        orbGradient.addColorStop(0, highlightColor); // Center highlight
+        orbGradient.addColorStop(0.7, baseColor);    // Main color
+        orbGradient.addColorStop(1, shadowColor);    // Edge color for depth
+        ctx.fillStyle = orbGradient;
+        ctx.fill();
+
+        // Add a smaller, brighter specular highlight
+        ctx.beginPath();
+        ctx.arc(centerX - orbRadius * 0.3, centerY - orbRadius * 0.4, orbRadius * 0.25, 0, Math.PI * 2, false);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fill();
+        
+        // Refresh the texture
+        canvasTexture.refresh();
     }
 } 

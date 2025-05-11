@@ -95,10 +95,8 @@ export class EnemySpawner {
     }
 
     private spawnWaveEnemies(waveDef: WaveDefinition): void {
-        let cumulativeDelay = 0;
-
         for (const group of waveDef.enemyGroups) {
-            const groupSpawnDelay = cumulativeDelay + (group.spawnDelay || 0);
+            const groupSpawnDelay = group.spawnDelay || 0;
             
             for (let i = 0; i < group.count; i++) {
                 const individualSpawnTime = groupSpawnDelay + (i * (group.spawnInterval || 500)); // Default 500ms interval if not specified
@@ -115,9 +113,6 @@ export class EnemySpawner {
                 });
                 this.waveSpawnTimers.push(timer);
             }
-            // Estimate time for this group to finish spawning for the next group's cumulativeDelay
-            // This is a rough estimate; more precise chaining could be done if needed.
-            cumulativeDelay = groupSpawnDelay + (group.count * (group.spawnInterval || 500));
         }
          // console.log(`EnemySpawner: Scheduled ${this.waveSpawnTimers.length} individual enemy spawns for wave ${waveDef.waveNumber}.`);
     }
@@ -128,10 +123,31 @@ export class EnemySpawner {
             return;
         }
 
-        const spawnRadius = 600; // pixels away from the player
-        const angle = Math.random() * Math.PI * 2;
-        const spawnX = this.player.x + Math.cos(angle) * spawnRadius;
-        const spawnY = this.player.y + Math.sin(angle) * spawnRadius;
+        const gameWidth = this.scene.cameras.main.width;
+        const gameHeight = this.scene.cameras.main.height;
+        const buffer = 50; // Pixels to ensure enemy is off-screen
+
+        const halfW = gameWidth / 2;
+        const halfH = gameHeight / 2;
+
+        const side = Math.floor(Math.random() * 4); // 0: Left, 1: Right, 2: Top, 3: Bottom
+        let spawnX: number;
+        let spawnY: number;
+
+        if (side === 0) { // Spawn on the Left
+            spawnX = this.player.x - halfW - buffer;
+            spawnY = this.player.y + (Math.random() - 0.5) * gameHeight;
+        } else if (side === 1) { // Spawn on the Right
+            spawnX = this.player.x + halfW + buffer;
+            spawnY = this.player.y + (Math.random() - 0.5) * gameHeight;
+        } else if (side === 2) { // Spawn on the Top
+            spawnX = this.player.x + (Math.random() - 0.5) * gameWidth;
+            spawnY = this.player.y - halfH - buffer;
+        } else { // Spawn on the Bottom (side === 3)
+            spawnX = this.player.x + (Math.random() - 0.5) * gameWidth;
+            spawnY = this.player.y + halfH + buffer;
+        }
+        
         const enemyId = Phaser.Utils.String.UUID();
 
         const newEnemy = new EnemySprite(
@@ -152,6 +168,9 @@ export class EnemySpawner {
 
         this.enemiesAliveInCurrentWave--;
         this.enemiesKilledInCurrentWave++;
+        
+        // Emit event for enemy removal (for HUD indicators)
+        this.scene.game.events.emit('enemyRemoved', { enemyId: enemy.entityId });
         
         // Emit event for UI update (enemies remaining)
         this.scene.events.emit('enemyDefeatedInWave', { 

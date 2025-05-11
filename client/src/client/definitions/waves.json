@@ -1,27 +1,149 @@
 [
     {
         "waveNumber": 1,
-        "waveStartMessage": "Wave 1: Slime Time!",
+        "waveStartMessage": "Wave 1: First Encounters!",
         "enemyGroups": [
-            { "enemyType": "slime", "count": 10, "spawnInterval": 1000 }
+            { "enemyType": "patrol_cop", "count": 8, "spawnInterval": 1200 }, 
+            { "enemyType": "court_runner", "count": 2, "spawnInterval": 2000, "spawnDelay": 2500 },
+            { "enemyType": "nodding_junkie", "count": 2, "spawnInterval": 1500, "spawnDelay": 4000 },
+            { "enemyType": "bodega_thief", "count": 3, "spawnInterval": 1800, "spawnDelay": 5000 }
         ],
         "timeToNextWave": 5000
     },
     {
         "waveNumber": 2,
-        "waveStartMessage": "Wave 2: Goblins Approach!",
+        "waveStartMessage": "Wave 2: Rookies & Pickers!",
         "enemyGroups": [
-            { "enemyType": "slime", "count": 10, "spawnInterval": 1500, "spawnDelay": 0 },
-            { "enemyType": "goblin", "count": 5, "spawnInterval": 500, "spawnDelay": 1000 }
+            { "enemyType": "patrol_cop", "count": 6, "spawnInterval": 1300, "spawnDelay": 0 },
+            { "enemyType": "caffeine_rookie", "count": 5, "spawnInterval": 900, "spawnDelay": 1000 },
+            { "enemyType": "meter_maid", "count": 2, "spawnInterval": 1200, "spawnDelay": 4000 },
+            { "enemyType": "community_watch", "count": 2, "spawnInterval": 1800, "spawnDelay": 6000 },
+            { "enemyType": "scam_charity_picker", "count": 2, "spawnInterval": 2200, "spawnDelay": 7000 }
         ],
         "timeToNextWave": 5000
     },
     {
         "waveNumber": 3,
-        "waveStartMessage": "Wave 3: The Horde!",
+        "waveStartMessage": "Wave 3: Legal Troubles & Tossed Bottles!",
         "enemyGroups": [
-            { "enemyType": "slime", "count": 20, "spawnInterval": 800 },
-            { "enemyType": "goblin", "count": 10, "spawnInterval": 1200, "spawnDelay": 2000 }
+            { "enemyType": "patrol_cop", "count": 4, "spawnInterval": 1100 },
+            { "enemyType": "court_runner", "count": 6, "spawnInterval": 800, "spawnDelay": 1000 },
+            { "enemyType": "caffeine_rookie", "count": 3, "spawnInterval": 1200, "spawnDelay": 5000 },
+            { "enemyType": "college_kid", "count": 3, "spawnInterval": 1400, "spawnDelay": 7000 },
+            { "enemyType": "bus_shelter_heckler", "count": 2, "spawnInterval": 2000, "spawnDelay": 8500 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 4,
+        "waveStartMessage": "Wave 4: Financial Woes & Animal Control!",
+        "enemyGroups": [
+            { "enemyType": "tax_man", "count": 6, "spawnInterval": 1600 },
+            { "enemyType": "rent_collector", "count": 6, "spawnInterval": 1100, "spawnDelay": 1500 },
+            { "enemyType": "repo_agent", "count": 3, "spawnInterval": 1400, "spawnDelay": 5000 },
+            { "enemyType": "dumpster_defender", "count": 2, "spawnInterval": 1900, "spawnDelay": 7000 },
+            { "enemyType": "animal_control_officer", "count": 2, "spawnInterval": 2100, "spawnDelay": 8000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 5,
+        "waveStartMessage": "Wave 5: Heavy Pressure!",
+        "enemyGroups": [
+            { "enemyType": "patrol_cop", "count": 5, "spawnInterval": 900 },
+            { "enemyType": "meter_maid", "count": 6, "spawnInterval": 1100, "spawnDelay": 1200 },
+            { "enemyType": "court_runner", "count": 4, "spawnInterval": 800, "spawnDelay": 6000 },
+            { "enemyType": "security_guard", "count": 3, "spawnInterval": 1300, "spawnDelay": 8000 },
+            { "enemyType": "nodding_junkie", "count": 4, "spawnInterval": 1000, "spawnDelay": 10000 },
+            { "enemyType": "bodega_thief", "count": 3, "spawnInterval": 1600, "spawnDelay": 11000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 6,
+        "waveStartMessage": "Wave 6: Night Club Mayhem & Recruiters!",
+        "enemyGroups": [
+            { "enemyType": "security_guard", "count": 6, "spawnInterval": 1300 },
+            { "enemyType": "bouncer", "count": 3, "spawnInterval": 2000, "spawnDelay": 1500 },
+            { "enemyType": "off_duty_cop", "count": 2, "spawnInterval": 1800, "spawnDelay": 5000 },
+            { "enemyType": "needle_dealer", "count": 3, "spawnInterval": 1200, "spawnDelay": 7000 },
+            { "enemyType": "community_watch", "count": 2, "spawnInterval": 1600, "spawnDelay": 9000 },
+            { "enemyType": "predatory_recruiter", "count": 2, "spawnInterval": 2300, "spawnDelay": 10000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 7,
+        "waveStartMessage": "Wave 7: Desperation & Street Cleaning!",
+        "enemyGroups": [
+            { "enemyType": "street_preacher", "count": 5, "spawnInterval": 1500 },
+            { "enemyType": "college_kid", "count": 5, "spawnInterval": 1300, "spawnDelay": 2000 },
+            { "enemyType": "bouncer", "count": 2, "spawnInterval": 1800, "spawnDelay": 5000 },
+            { "enemyType": "janitor", "count": 3, "spawnInterval": 1200, "spawnDelay": 7000 },
+            { "enemyType": "nodding_junkie", "count": 5, "spawnInterval": 900, "spawnDelay": 9000 },
+            { "enemyType": "street_sweeper_crew", "count": 1, "spawnInterval": 3000, "spawnDelay": 11000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 8,
+        "waveStartMessage": "Wave 8: Downtown Chaos!",
+        "enemyGroups": [
+            { "enemyType": "security_guard", "count": 4, "spawnInterval": 1000 },
+            { "enemyType": "dumpster_defender", "count": 3, "spawnInterval": 1700, "spawnDelay": 1500 },
+            { "enemyType": "guard_dog", "count": 6, "spawnInterval": 700, "spawnDelay": 3000 },
+            { "enemyType": "street_arsonist", "count": 2, "spawnInterval": 1200, "spawnDelay": 5000 },
+            { "enemyType": "meter_maid", "count": 4, "spawnInterval": 1100, "spawnDelay": 7000 },
+            { "enemyType": "animal_control_officer", "count": 2, "spawnInterval": 2000, "spawnDelay": 8500 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 9,
+        "waveStartMessage": "Wave 9: All-Out Assault!",
+        "enemyGroups": [
+            { "enemyType": "street_arsonist", "count": 4, "spawnInterval": 1300 },
+            { "enemyType": "off_duty_cop", "count": 5, "spawnInterval": 1500, "spawnDelay": 1500 },
+            { "enemyType": "repo_agent", "count": 3, "spawnInterval": 1700, "spawnDelay": 4000 },
+            { "enemyType": "bouncer", "count": 3, "spawnInterval": 2000, "spawnDelay": 6000 },
+            { "enemyType": "community_watch", "count": 3, "spawnInterval": 1400, "spawnDelay": 8000 },
+            { "enemyType": "college_kid", "count": 4, "spawnInterval": 1200, "spawnDelay": 10000 },
+            { "enemyType": "bus_shelter_heckler", "count": 2, "spawnInterval": 1900, "spawnDelay": 11000 }
+        ],
+        "timeToNextWave": 5000
+    },
+    {
+        "waveNumber": 10,
+        "waveStartMessage": "Wave 10: THE MEGA HORDE!",
+        "enemyGroups": [
+            { "enemyType": "patrol_cop", "count": 6, "spawnInterval": 800 },
+            { "enemyType": "security_guard", "count": 5, "spawnInterval": 1100 },
+            { "enemyType": "off_duty_cop", "count": 4, "spawnInterval": 1400 },
+            { "enemyType": "meter_maid", "count": 5, "spawnInterval": 1300 },
+            { "enemyType": "street_preacher", "count": 3, "spawnInterval": 1600, "spawnDelay": 4000 },
+            { "enemyType": "bouncer", "count": 3, "spawnInterval": 2000, "spawnDelay": 7000 },
+            { "enemyType": "guard_dog", "count": 7, "spawnInterval": 600, "spawnDelay": 10000 },
+            { "enemyType": "street_arsonist", "count": 4, "spawnInterval": 1200, "spawnDelay": 13000 },
+            { "enemyType": "dumpster_defender", "count": 2, "spawnInterval": 1800, "spawnDelay": 16000 },
+            { "enemyType": "predatory_recruiter", "count": 2, "spawnInterval": 2500, "spawnDelay": 17000 }
+        ]
+    },
+    {
+        "waveNumber": 11,
+        "waveStartMessage": "Wave 11: ENDLESS NIGHTMARE CONTINUES!",
+        "enemyGroups": [
+            { "enemyType": "patrol_cop", "count": 7, "spawnInterval": 700 },
+            { "enemyType": "caffeine_rookie", "count": 7, "spawnInterval": 800 },
+            { "enemyType": "tax_man", "count": 5, "spawnInterval": 1200 },
+            { "enemyType": "security_guard", "count": 6, "spawnInterval": 1000 },
+            { "enemyType": "street_preacher", "count": 5, "spawnInterval": 1300, "spawnDelay": 6000 },
+            { "enemyType": "off_duty_cop", "count": 6, "spawnInterval": 1100, "spawnDelay": 9000 },
+            { "enemyType": "court_runner", "count": 10, "spawnInterval": 600, "spawnDelay": 12000 },
+            { "enemyType": "bouncer", "count": 4, "spawnInterval": 1500, "spawnDelay": 15000 },
+            { "enemyType": "community_watch", "count": 4, "spawnInterval": 1300, "spawnDelay": 18000 },
+            { "enemyType": "college_kid", "count": 6, "spawnInterval": 1000, "spawnDelay": 21000 },
+            { "enemyType": "street_sweeper_crew", "count": 2, "spawnInterval": 2800, "spawnDelay": 23000 },
+            { "enemyType": "animal_control_officer", "count": 3, "spawnInterval": 2000, "spawnDelay": 25000 }
         ]
     }
 ] 

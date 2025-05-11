@@ -6,7 +6,15 @@ export default class BootScene extends Phaser.Scene {
     }
 
     preload() {
-        // Nothing here
+        // Preload Character Sprites
+        for (let i = 1; i <= 20; i++) {
+            this.load.image(`character_front_${i}`, `assets/characters/front/${i}.png`);
+        }
+
+        // Preload Enemy Sprites
+        for (let i = 1; i <= 36; i++) {
+            this.load.image(`enemy_${i}`, `assets/enemies/${i}.png`);
+        }
     }
 
     create() {

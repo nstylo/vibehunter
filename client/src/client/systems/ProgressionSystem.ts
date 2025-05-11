@@ -34,8 +34,7 @@ export class ProgressionSystem {
         // Emit initial stats so player is synced up from the start
         this.scene.events.emit('playerStatsUpdated', this.currentStats);
         
-        // Listen for enemy death to gain XP
-        this.scene.events.on('enemyKilled', this.gainXP, this);
+        // XP gain is now handled by GameScene calling addXp directly
     }
 
     private generateInitialUpgrades(): UpgradeChoice[] {
@@ -78,12 +77,12 @@ export class ProgressionSystem {
         // e.g. if chosenUpgrade.level === 1, add the level 2 version of that upgrade.
     }
 
-    // New method to handle gaining XP
-    public gainXP(data: { amount?: number, enemy?: object }): void {
+    // Renamed from gainXP and parameter changed
+    public addXp(amount: number): void {
         // Default XP gain if not specified (can be based on enemy type later)
-        const xpAmount = data.amount || 10;
+        // const xpAmount = data.amount || 10; // Old way
         
-        this.currentXP += xpAmount;
+        this.currentXP += amount;
         
         // Check if leveled up
         this.checkLevelUp();
@@ -162,6 +161,6 @@ export class ProgressionSystem {
     }
 
     public destroy(): void {
-        this.scene.events.off('enemyKilled', this.gainXP, this);
+        // REMOVED: this.scene.events.off('enemyKilled', this.gainXP, this);
     }
 } 

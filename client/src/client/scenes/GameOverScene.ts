@@ -6,6 +6,11 @@ export default class GameOverScene extends Phaser.Scene {
     }
 
     create(data: { wavesSurvived?: number }) {
+        // Stop UpgradeUIScene if it's active
+        if (this.scene.isActive('UpgradeUIScene')) {
+            this.scene.stop('UpgradeUIScene');
+        }
+
         // Semi-transparent background
         const graphics = this.add.graphics();
         graphics.fillStyle(0x000000, 0.7);

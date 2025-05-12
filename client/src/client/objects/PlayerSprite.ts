@@ -9,6 +9,7 @@ import { DataManager } from '../systems/DataManager';
 import type { IAttackInstance } from '../interfaces/IAttackInstance';
 import type { IAttackDefinition } from '../interfaces/IAttackDefinition';
 import type { IStatusEffectData } from '../interfaces/IStatusEffect';
+import { GameEvent } from '../../common/events';
 
 const CHARACTER_SPRITE_KEYS = [
     'character_front_1', 'character_front_2', 'character_front_3', 'character_front_4',
@@ -151,7 +152,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             console.warn('PlayerSprite: Keyboard input system not available in the scene. WASD keys will not work.');
         }
 
-        this.scene.events.on('playerStatsUpdated', this.updateStats, this);
+        this.scene.events.on(GameEvent.PLAYER_STATS_UPDATED, this.updateStats, this);
         this.playerPhysicsHeight = PLAYER_PHYSICS_HEIGHT; 
 
         this.recalculateStats(); // Important: Calculate currentStats after all baseStats are set.
@@ -382,7 +383,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         const lifespan = (range / effectiveSpeed) * 1000; // Convert to milliseconds
         
         // Emit event to spawn projectile
-        this.scene.events.emit('EVENT_ENTITY_SHOOT_PROJECTILE', {
+        this.scene.events.emit(GameEvent.ENTITY_SHOOT_PROJECTILE, {
             shooter: this,
             projectileType: projectileType,
             damage: damage,
@@ -1024,7 +1025,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         
         // Ensure scene context still exists before trying to remove listeners
         if (this.scene) {
-            this.scene.events.off('playerStatsUpdated', this.updateStats, this); // Clean up listener
+            this.scene.events.off(GameEvent.PLAYER_STATS_UPDATED, this.updateStats, this); // Clean up listener
         }
         super.destroy(fromScene);
     }

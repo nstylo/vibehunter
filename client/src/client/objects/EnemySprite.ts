@@ -18,7 +18,7 @@ import { ChaseTargetBehavior } from '../behaviors/ChaseTargetBehavior';
 import { AttackingMeleeBehavior } from '../behaviors/AttackingMeleeBehavior';
 import { AttackingRangedBehavior } from '../behaviors/AttackingRangedBehavior';
 import { FleeBehavior } from '../behaviors/FleeBehavior'; // Added import
-import { EVENT_ENTITY_SHOOT_PROJECTILE } from '../../common/events';
+import { GameEvent } from '../../common/events'; // Corrected import
 
 const ENEMY_SPRITE_KEYS: string[] = [];
 for (let i = 1; i <= 36; i++) {
@@ -723,7 +723,7 @@ export class EnemySprite extends EntitySprite {
         const lifespan = (range / effectiveSpeed) * 1000; // Convert to milliseconds
         
         // Emit event to spawn projectile
-        this.scene.events.emit(EVENT_ENTITY_SHOOT_PROJECTILE, {
+        this.scene.events.emit(GameEvent.ENTITY_SHOOT_PROJECTILE, {
             shooter: this,
             projectileType: projectileType,
             damage: damage,

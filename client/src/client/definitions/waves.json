@@ -3,7 +3,6 @@
         "waveNumber": 1,
         "waveStartMessage": "Wave 1: First Encounters!",
         "enemyGroups": [
-            { "enemyType": "caffeine_rookie", "count": 5, "spawnInterval": 900, "spawnDelay": 1000 },
             { "enemyType": "patrol_cop", "count": 8, "spawnInterval": 1200 }, 
             { "enemyType": "court_runner", "count": 2, "spawnInterval": 2000, "spawnDelay": 2500 },
             { "enemyType": "nodding_junkie", "count": 2, "spawnInterval": 1500, "spawnDelay": 4000 },
@@ -16,7 +15,7 @@
         "waveStartMessage": "Wave 2: Rookies & Pickers!",
         "enemyGroups": [
             { "enemyType": "patrol_cop", "count": 6, "spawnInterval": 1300, "spawnDelay": 0 },
-            { "enemyType": "caffeine_rookie", "count": 5, "spawnInterval": 900, "spawnDelay": 1000 },
+            { "enemyType": "caffeine_rookie", "count": 3, "spawnInterval": 900, "spawnDelay": 1000 },
             { "enemyType": "meter_maid", "count": 2, "spawnInterval": 1200, "spawnDelay": 4000 },
             { "enemyType": "community_watch", "count": 2, "spawnInterval": 1800, "spawnDelay": 6000 },
             { "enemyType": "scam_charity_picker", "count": 2, "spawnInterval": 2200, "spawnDelay": 7000 }
@@ -29,7 +28,7 @@
         "enemyGroups": [
             { "enemyType": "patrol_cop", "count": 4, "spawnInterval": 1100 },
             { "enemyType": "court_runner", "count": 6, "spawnInterval": 800, "spawnDelay": 1000 },
-            { "enemyType": "caffeine_rookie", "count": 3, "spawnInterval": 1200, "spawnDelay": 5000 },
+            { "enemyType": "caffeine_rookie", "count": 4, "spawnInterval": 1200, "spawnDelay": 5000 },
             { "enemyType": "college_kid", "count": 3, "spawnInterval": 1400, "spawnDelay": 7000 },
             { "enemyType": "bus_shelter_heckler", "count": 2, "spawnInterval": 2000, "spawnDelay": 8500 }
         ],

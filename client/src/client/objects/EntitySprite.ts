@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import {
-    EVENT_ENTITY_TAKE_DAMAGE,
-    EVENT_ENTITY_DIED,
-    EVENT_ENTITY_SHOOT_PROJECTILE
+    GameEvent
 } from '../../common/events';
 import type ProjectileSprite from './ProjectileSprite';
 import type { ParticleSystem } from '../systems/ParticleSystem';
 import type { IStatusEffect, IStatusEffectData } from '../interfaces/IStatusEffect';
 import statusEffectFactory from '../systems/StatusEffectFactory'; // Import the factory
+import { HealthBarManager } from '../ui/HealthBarManager';
+import { FloatingTextManager } from '../ui/FloatingTextManager';
 
 // Extend the interface to include runtime properties
 interface IStatusEffectRuntime extends IStatusEffect {
@@ -83,9 +83,8 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
         
         this.particleSystem = particleSystem;
 
-        this.healthBarGraphics = scene.add.graphics();
-        // Initially hide health bar until damage is taken
-        this.healthBarGraphics.visible = false;
+        // Create health bar using the new manager
+        this.healthBarGraphics = HealthBarManager.createHealthBar(scene, entityId);
         this.updateHealthBar();
 
         scene.add.existing(this);
@@ -103,22 +102,7 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
 
     // Show health bar and reset the hide timer
     private showHealthBar(): void {
-        if (!this.healthBarVisible) {
-            this.healthBarGraphics.visible = true;
-            this.healthBarVisible = true;
-        }
-        
-        // Reset or create the timer to hide the health bar
-        if (this.healthBarHideTimer) {
-            this.healthBarHideTimer.reset({ delay: this.healthBarHideDelay });
-        } else {
-            this.healthBarHideTimer = this.scene.time.delayedCall(this.healthBarHideDelay, () => {
-                if (this.active && this.healthBarGraphics) {
-                    this.healthBarGraphics.visible = false;
-                    this.healthBarVisible = false;
-                }
-            });
-        }
+        HealthBarManager.showHealthBar(this.scene, this.entityId);
     }
 
     // Common methods can be added here, e.g.:
@@ -136,9 +120,15 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
         // Show health bar when damage is taken
         this.showHealthBar();
 
-        this.displayDamageNumber(actualDamageTaken);
+        // Display floating damage number
+        FloatingTextManager.showDamageNumber(
+            this.scene,
+            actualDamageTaken,
+            this.x,
+            this.y - this.height / 2
+        );
 
-        this.scene.events.emit(EVENT_ENTITY_TAKE_DAMAGE, {
+        this.scene.events.emit(GameEvent.ENTITY_TAKE_DAMAGE, {
             target: this,
             damage: actualDamageTaken,
             newHp: this.currentStats.hp,
@@ -167,15 +157,11 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     protected die(killer?: EntitySprite | ProjectileSprite | string): void {
-        if (this.healthBarHideTimer) {
-            this.healthBarHideTimer.remove();
-            this.healthBarHideTimer = null;
-        }
+        // Remove health bar using the manager
+        HealthBarManager.removeHealthBar(this.entityId);
         
-        this.healthBarGraphics.destroy();
-
         // Emit died event before deactivating/destroying
-        this.scene.events.emit(EVENT_ENTITY_DIED, { entity: this, killer: killer });
+        this.scene.events.emit(GameEvent.ENTITY_DIED, { entity: this, killer: killer });
 
         this.setActive(false);
         this.setVisible(false);
@@ -184,99 +170,27 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
         }
     }
 
-    // Placeholder for update logic, to be potentially overridden or extended by subclasses
-    // update(time: number, delta: number): void {
-    //     // Common update logic if any
-    // }
-
     // Method to update the health bar's appearance
     protected updateHealthBar(): void {
-        this.healthBarGraphics.clear();
-        if (!this.active || !this.currentStats || this.currentStats.hp <= 0) return;
-
-        const barWidth = this.width * 0.8;
-        const barHeight = 8;
-        const barX = this.x - barWidth / 2;
-        const barY = this.y - this.height / 2 - barHeight - 5;
-
-        this.healthBarGraphics.fillStyle(0x808080, 0.7);
-        this.healthBarGraphics.fillRect(barX, barY, barWidth, barHeight);
-
-        const healthPercentage = this.currentStats.hp / this.currentStats.maxHp;
-        const currentHealthWidth = barWidth * healthPercentage;
-        this.healthBarGraphics.fillStyle(0x00ff00, 0.9);
-        this.healthBarGraphics.fillRect(barX, barY, currentHealthWidth, barHeight);
-
-        this.healthBarGraphics.lineStyle(1, 0x000000, 0.8);
-        this.healthBarGraphics.strokeRect(barX, barY, barWidth, barHeight);
-    }
-
-    // Add method to update health bar position without redrawing
-    protected updateHealthBarPosition(): void {
-        if (!this.active || !this.currentStats || this.currentStats.hp <= 0) {
-            this.healthBarGraphics.clear();
-            return;
-        }
+        if (!this.active || !this.currentStats) return;
         
-        // Redraw the health bar at the updated position
-        this.healthBarGraphics.clear();
-        
-        const barWidth = this.width * 0.8;
-        const barHeight = 8;
-        const barX = this.x - barWidth / 2;
-        const barY = this.y - this.height / 2 - barHeight - 5;
-        
-        // Draw background
-        this.healthBarGraphics.fillStyle(0x808080, 0.7);
-        this.healthBarGraphics.fillRect(barX, barY, barWidth, barHeight);
-        
-        // Draw health portion
-        const healthPercentage = this.currentStats.hp / this.currentStats.maxHp;
-        const currentHealthWidth = barWidth * healthPercentage;
-        this.healthBarGraphics.fillStyle(0x00ff00, 0.9);
-        this.healthBarGraphics.fillRect(barX, barY, currentHealthWidth, barHeight);
-        
-        // Draw border
-        this.healthBarGraphics.lineStyle(1, 0x000000, 0.8);
-        this.healthBarGraphics.strokeRect(barX, barY, barWidth, barHeight);
-    }
-
-    // Method to display floating damage numbers
-    private displayDamageNumber(amount: number): void {
-        if (amount <= 0) return;
-
-        const damageText = this.scene.add.text(
+        HealthBarManager.updateHealthBar(
+            this.entityId,
+            this.currentStats.hp,
+            this.currentStats.maxHp,
             this.x,
-            this.y - this.height / 2,
-            amount.toString(),
-            {
-                fontFamily: 'Arial',
-                fontSize: '20px',
-                color: '#ff0000',
-                stroke: '#000000',
-                strokeThickness: 3
-            }
+            this.y,
+            this.width,
+            this.height
         );
-        damageText.setOrigin(0.5, 0.5);
-
-        this.scene.tweens.add({
-            targets: damageText,
-            y: damageText.y - 50,
-            alpha: { start: 1, to: 0 },
-            duration: 1000,
-            ease: 'Power1',
-            onComplete: () => {
-                damageText.destroy();
-            }
-        });
     }
 
-    // Ensure health bar follows the sprite
-    // This should be called in the sprite's main update loop if it has one,
-    // or directly after the sprite's position is updated by the scene/system.
-    // For simplicity, we'll call it in an overridden `set x y` or in a postUpdate if available.
-    // Phaser sprites don't have a 'postUpdate' by default in the same way components might.
-    // We'll rely on calling updateHealthBar explicitly for now when position changes or create a small update method.
+    // Update health bar position when entity moves
+    protected updateHealthBarPosition(): void {
+        if (!this.active || !this.currentStats || this.currentStats.hp <= 0) return;
+        
+        this.updateHealthBar(); // Just reuse the full update for simplicity
+    }
 
     protected updateWobble(time: number, delta: number): void {
         if (!this.body || !this.active) {
@@ -391,7 +305,7 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
             shootDirection = new Phaser.Math.Vector2(this.flipX ? -1 : 1, 0);
         }
 
-        this.scene.events.emit(EVENT_ENTITY_SHOOT_PROJECTILE, {
+        this.scene.events.emit(GameEvent.ENTITY_SHOOT_PROJECTILE, {
             shooter: this,
             projectileType: this.projectileType, 
             damage: this.currentStats.projectileDamage,

@@ -8,7 +8,7 @@ export class EnemyDebugDisplay {
     private scene: GameScene;
     private debugTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     private isVisible: boolean = false;
-    private readonly Y_OFFSET = -50; // Offset above the enemy
+    private readonly Y_OFFSET = -10; // Offset above the enemy
     private readonly LINE_HEIGHT = 18;
 
     constructor(scene: GameScene) {

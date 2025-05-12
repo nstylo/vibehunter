@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
-import type { UpgradeChoice } from '../../common/PlayerStats';
-import type { ProgressionSystem } from '../systems/ProgressionSystem';
+import type { ProgressionSystem, UpgradeChoice } from '../systems/ProgressionSystem';
 
 const UPGRADE_FONT_FAMILY = 'Arial';
 
@@ -294,4 +293,4 @@ export class UpgradeUIScene extends Phaser.Scene {
             this.scene.stop(); // Stop this UI scene
         }
     }
-}
+} 

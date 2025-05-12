@@ -320,16 +320,29 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         let finalTargetPos: Phaser.Math.Vector2 | undefined = targetPos;
 
         if (!finalTargetPos) {
+            // Get the attack range
+            const attackRange = attack.effectiveRange ?? attack.definition.range ?? AUTO_SHOOT_RANGE;
+
+            // Check if current target is valid and within range
+            if (this.targetEnemy && this.targetEnemy.active) {
+                const distanceToTarget = Phaser.Math.Distance.Between(
+                    this.x, this.y, this.targetEnemy.x, this.targetEnemy.y
+                );
+                
+                // If target is out of range, find a new one
+                if (distanceToTarget > attackRange) {
+                    this.targetEnemy = this.findNearestEnemy(attackRange);
+                }
+            } else {
+                // Try to find a new target if one isn't set or is inactive
+                this.targetEnemy = this.findNearestEnemy(attackRange);
+            }
+            
+            // If we have a valid target, set the finalTargetPos
             if (this.targetEnemy && this.targetEnemy.active) {
                 finalTargetPos = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
             } else {
-                // Try to find a new target if one isn't set or is inactive
-                this.targetEnemy = this.findNearestEnemy();
-                if (this.targetEnemy && this.targetEnemy.active) {
-                    finalTargetPos = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
-                } else {
-                    return; // No valid target found
-                }
+                return; // No valid target found within range
             }
         }
 
@@ -660,11 +673,11 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     /**
      * Find and target the nearest enemy
      */
-    private findNearestEnemy(): EnemySprite | null {
+    private findNearestEnemy(range: number = AUTO_SHOOT_RANGE): EnemySprite | null {
         if (!this.enemies || this.enemies.length === 0) return null;
 
         let nearestEnemy: EnemySprite | null = null;
-        let shortestDistance = AUTO_SHOOT_RANGE;
+        let shortestDistance = range;
 
         for (const enemyObj of this.enemies) {
             const enemy = enemyObj as EnemySprite;
@@ -689,6 +702,11 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             if (attack.currentCooldown > 0) {
                 attack.currentCooldown -= delta;
             }
+        }
+        
+        // Periodically refresh the target enemy (every ~500ms)
+        if (time % 500 < 20) { // Small window to avoid calling every frame
+            this.targetEnemy = this.findNearestEnemy();
         }
     }
 

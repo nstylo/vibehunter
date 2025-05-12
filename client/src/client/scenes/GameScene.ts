@@ -572,8 +572,14 @@ export class GameScene extends Phaser.Scene {
         }
         this.remotePlayers.clear();
 
-        // Potentially destroy other systems or clear event listeners if not handled by Phaser automatically
-        this.events.off(GameEvent.ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
+        // Remove listeners with specific handlers/context
+        this.events.off(GameEvent.ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this); 
+        this.game.events.off(GameEvent.RESUME_GAME, this.resumeGame, this);
+        this.game.events.off(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
+        
+        // Remove all listeners for events added with inline functions on this.events
+        this.events.off(GameEvent.XP_UPDATED);
+        this.events.off(GameEvent.PLAYER_LEVEL_UP);
         this.events.off(GameEvent.ENTITY_DIED);
         this.events.off(GameEvent.ENTITY_TAKE_DAMAGE);
         this.events.off(GameEvent.PROJECTILE_SPAWNED);
@@ -582,15 +588,8 @@ export class GameScene extends Phaser.Scene {
         this.events.off(GameEvent.ENEMY_DEFEATED_IN_WAVE);
         this.events.off(GameEvent.WAVE_CLEAR);
         this.events.off(GameEvent.ALL_WAVES_CLEARED);
-        this.events.off(GameEvent.XP_UPDATED);
-        this.events.off(GameEvent.PLAYER_LEVEL_UP);
+        // Note: this.game.events listeners (HUD_READY, RESUME_GAME, QUIT_TO_MENU) are handled separately or are self-removing (once).
         
-        // Remove pause-related event listeners
-        this.game.events.off(GameEvent.RESUME_GAME, this.resumeGame, this);
-        this.game.events.off(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
-        
-        // ... remove other listeners added with this.events.on ...
-
         // If HUD scene is managed here, ensure it's stopped
         if (this.scene.isActive('HudScene')) {
             this.scene.stop('HudScene');

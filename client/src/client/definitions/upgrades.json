@@ -1,44 +1,102 @@
-[
+{
+  "general_upgrades": [
     {
-        "id": "ms_1",
-        "type": "movementSpeed",
-        "name": "Parkour Sneakers",
-        "description": "Increases movement speed by 10%.",
-        "level": 1
+      "id": "MS_1_PARKOUR_SNEAKERS",
+      "name": "Parkour Sneakers",
+      "description": "Increases movement speed by 10%.",
+      "effects": [
+        { "stat": "movementSpeed", "modifier": "PERCENTAGE", "value": 0.10 }
+      ],
+      "maxLevel": 5
     },
     {
-        "id": "pd_1",
-        "type": "projectileDamage",
-        "name": "Steel-Tipped Darts",
-        "description": "Increases projectile damage by 2.",
-        "level": 1
+      "id": "DEF_1_KEVLAR_VEST",
+      "name": "Kevlar Vest (Found)",
+      "description": "Increases defense by 1.",
+      "effects": [
+        { "stat": "defense", "modifier": "FLAT", "value": 1 }
+      ],
+      "maxLevel": 3
     },
     {
-        "id": "as_1",
-        "type": "attackSpeed",
-        "name": "Adrenaline Shot",
-        "description": "Increases attack speed by 15% (reduces cooldown).",
-        "level": 1
+      "id": "HP_1_EXTRA_RATIONS",
+      "name": "Extra Rations",
+      "description": "Increases max HP by 15.",
+      "effects": [
+        { "stat": "maxHp", "modifier": "FLAT", "value": 15 }
+      ],
+      "maxLevel": 5
     },
     {
-        "id": "psize_1",
-        "type": "projectileSize",
-        "name": "Graffiti Bomb",
-        "description": "Increases projectile size by 20%.",
-        "level": 1
-    },
-    {
-        "id": "def_1",
-        "type": "defense",
-        "name": "Kevlar Vest",
-        "description": "Increases defense by 1.",
-        "level": 1
-    },
-    {
-        "id": "pspeed_1",
-        "type": "projectileSpeed",
-        "name": "High-Velocity Paintball",
-        "description": "Increases projectile speed by 15%.",
-        "level": 1
+      "id": "XP_GAIN_1_STREET_SMARTS",
+      "name": "Street Smarts",
+      "description": "Increases XP gain by 10%.",
+      "effects": [
+        { "stat": "xpGainModifier", "modifier": "PERCENTAGE", "value": 0.10 }
+      ],
+      "maxLevel": 3
     }
-] 
+  ],
+  "attack_upgrades": [
+    {
+      "id": "UNLOCK_SYRINGE_STASH",
+      "name": "Find Syringe Stash",
+      "description": "Unlocks a Syringe Toss attack. Handle with care.",
+      "type": "UNLOCK_ATTACK",
+      "attackId": "ENEMY_SYRINGE_TOSS" 
+    },
+    {
+      "id": "FIST_PUNCH_DMG_1_BRASS_KNUCKLES",
+      "name": "Found Brass Knuckles",
+      "description": "Increases Fist Punch damage by 3.",
+      "type": "MODIFY_ATTACK",
+      "targetAttackId": "FIST_PUNCH",
+      "effects": [
+        { "stat": "damage", "modifier": "FLAT", "value": 3 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "BATTERED_BOTTLE_DMG_1_SHARPER_SHARDS",
+      "name": "Sharper Shards",
+      "description": "Increases Battered Bottle damage by 4.",
+      "type": "MODIFY_ATTACK",
+      "targetAttackId": "BATTERED_BOTTLE_CLUB",
+      "effects": [
+        { "stat": "damage", "modifier": "FLAT", "value": 4 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "TORN_BOOK_PAGE_PROJ_1_EXTRA_PAGES",
+      "name": "Extra Pages",
+      "description": "Torn Book Page now throws 2 projectiles.",
+      "type": "MODIFY_ATTACK",
+      "targetAttackId": "TORN_BOOK_PAGE_THROW",
+      "effects": [
+        { "stat": "projectilesPerShot", "modifier": "FLAT_ADD", "value": 1 }
+      ],
+      "maxLevel": 2
+    },
+    {
+      "id": "GLOBAL_ATTACK_SPEED_1_ADRENALINE_RUSH",
+      "name": "Adrenaline Rush",
+      "description": "Reduces cooldown for ALL attacks by 8%.",
+      "type": "MODIFY_ALL_PLAYER_ATTACKS", 
+      "effects": [
+        { "stat": "attackCooldown", "modifier": "PERCENTAGE_DECREASE", "value": 0.08 }
+      ],
+      "maxLevel": 4
+    },
+    {
+      "id": "GLOBAL_PROJECTILE_SIZE_1_BIGGER_THINGS",
+      "name": "Bigger Things",
+      "description": "Increases size of ALL projectiles by 15%.",
+      "type": "MODIFY_ALL_PLAYER_ATTACKS", 
+      "effects": [
+        { "stat": "projectileSize", "modifier": "PERCENTAGE", "value": 0.15 }
+      ],
+      "maxLevel": 3
+    }
+  ]
+} 

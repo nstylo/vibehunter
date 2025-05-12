@@ -19,6 +19,7 @@ import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } f
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
 import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
 import { HitboxCollisionManager } from '../world/HitboxCollisionManager'; // ADDED
+import { EnemyDebugDisplay } from '../debug/EnemyDebugDisplay'; // ADDED: Import for EnemyDebugDisplay
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -27,38 +28,9 @@ interface GameSceneData {
     worldSeed?: number;
     isMultiplayer?: boolean;
     serverUrl?: string;
+    characterId?: string;
     // ... any other data from initialServerData
 }
-
-// Define Wave Configurations
-// const WAVE_DEFINITIONS: WaveDefinition[] = [
-//     {
-//         waveNumber: 1,
-//         waveStartMessage: "Wave 1: Slime Time!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 10, spawnInterval: 1000, isRanged: false },
-//         ],
-//         timeToNextWave: 5000 // 5 seconds after wave clear
-//     },
-//     {
-//         waveNumber: 2,
-//         waveStartMessage: "Wave 2: Goblins Approach!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 10, spawnInterval: 1500, isRanged: false, spawnDelay: 0 },
-//             { enemyType: 'goblin', count: 5, spawnInterval: 500, isRanged: true, spawnDelay: 1000 },
-//         ],
-//         timeToNextWave: 5000
-//     },
-//     {
-//         waveNumber: 3,
-//         waveStartMessage: "Wave 3: The Horde!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 20, spawnInterval: 800, isRanged: false },
-//             { enemyType: 'goblin', count: 10, spawnInterval: 1200, isRanged: true, spawnDelay: 2000 },
-//         ],
-//         // No timeToNextWave means this is the last wave in this definition set
-//     }
-// ];
 
 export class GameScene extends Phaser.Scene {
     player: PlayerSprite | undefined;
@@ -80,6 +52,7 @@ export class GameScene extends Phaser.Scene {
     private currentZoomTween: Phaser.Tweens.Tween | null = null;
     private keyZoomIn!: Phaser.Input.Keyboard.Key;
     private keyZoomOut!: Phaser.Input.Keyboard.Key;
+    private keyToggleEnemyDebug!: Phaser.Input.Keyboard.Key; // ADDED: Key for toggling enemy debug
 
     // Network related members
     private networkSystem: NetworkSystem | null = null;
@@ -95,6 +68,9 @@ export class GameScene extends Phaser.Scene {
 
     private cursorHideTimer?: Phaser.Time.TimerEvent;
     private readonly CURSOR_HIDE_DELAY = 200; // Time in ms to hide cursor after no movement
+
+    private enemyDebugDisplay!: EnemyDebugDisplay; // ADDED: Instance of EnemyDebugDisplay
+    private killCount = 0; // ADDED: Player's kill count
 
     constructor() {
         super({ key: 'GameScene' });
@@ -150,7 +126,11 @@ export class GameScene extends Phaser.Scene {
         // Initialize player BEFORE setting up collision
         const playerX = data.initialPosition?.x ?? mapWidth / 2;
         const playerY = data.initialPosition?.y ?? mapHeight / 2;
-        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', this.particleSystem);
+        
+        // Debug character information
+        console.log(`GameScene: Creating player with character ID: ${data.characterId ?? '1'}`);
+        
+        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', data.characterId ?? '1', this.particleSystem);
 
         // Configure player network mode if multiplayer
         if (this.isMultiplayer && this.networkSystem && this.player) {
@@ -230,6 +210,14 @@ export class GameScene extends Phaser.Scene {
             this.keyZoomOut = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS);
         }
 
+        // ADDED: Initialize EnemyDebugDisplay
+        this.enemyDebugDisplay = new EnemyDebugDisplay(this);
+
+        // ADDED: Key for toggling enemy debug display
+        if (this.input.keyboard) {
+            this.keyToggleEnemyDebug = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+        }
+
         this.cameras.main.startFollow(this.player, true, 1, 1);
         this.cameras.main.setBounds(0, 0, mapWidth, mapHeight); // Use new map dimensions
         this.cameras.main.roundPixels = true; // For smoother, pixel-perfect camera movement
@@ -293,22 +281,33 @@ export class GameScene extends Phaser.Scene {
         this.events.on(EVENT_ENTITY_DIED, (payload: { entity: EntitySprite, killer?: EntitySprite | ProjectileSprite | string }) => {
             if (payload.entity instanceof EnemySprite && this.enemySpawner) {
                 this.enemySpawner.notifyEnemyDefeated(payload.entity as EnemySprite);
-                if (payload.killer instanceof ProjectileSprite &&
-                    this.player &&
-                    payload.killer.ownerId === this.player.entityId) {
-                    // Use currentStats or baseStats for xpValue, with a fallback
+
+                // Check if the player is the killer, either directly or via a projectile
+                let killedByPlayer = false;
+                if (this.player) {
+                    if (payload.killer instanceof ProjectileSprite && payload.killer.ownerId === this.player.entityId) {
+                        killedByPlayer = true;
+                    } else if (payload.killer === this.player) { // Direct kill by player (e.g., melee)
+                        killedByPlayer = true;
+                    } else if (typeof payload.killer === 'string' && payload.killer === this.player.entityId) {
+                        // Case where killer is an entityId string referring to the player
+                        killedByPlayer = true;
+                    }
+                }
+
+                if (killedByPlayer) {
                     const xpAmount = (payload.entity as EnemySprite).currentStats.xpValue ?? (payload.entity as EnemySprite).baseStats.xpValue ?? 10;
-                    // Instead of emitting 'enemyKilled' for XP, spawn orbs
                     this.spawnXpOrbs(payload.entity.x, payload.entity.y, xpAmount);
-                    // We might still want an 'enemyKilled' event for other purposes (e.g. quests, stats)
-                    // For now, focusing on XP orb change.
-                    // this.events.emit('enemyKilled', { amount: xpAmount, enemy: payload.entity });
+                    
+                    // ADDED: Increment kill count and update HUD
+                    this.killCount++;
+                    this.game.events.emit('updateHud', { killCount: this.killCount });
                 }
             } else if (payload.entity instanceof PlayerSprite && payload.entity === this.player) {
                 const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() - 1 : 0; 
                 this.scene.stop('HudScene'); 
                 this.scene.stop(this.scene.key); 
-                this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived });
+                this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived, killCount: this.killCount }); // Pass killCount
             }
         });
 
@@ -365,18 +364,19 @@ export class GameScene extends Phaser.Scene {
         shooter: EntitySprite,
         projectileType: string,
         direction: Phaser.Math.Vector2,
-        targetPosition?: Phaser.Math.Vector2
+        targetPosition?: Phaser.Math.Vector2,
+        damage: number,
+        projectileSpeed: number,
+        lifespan: number,
+        projectileScale?: number,
     }): void {
-        const { shooter, projectileType, direction } = payload; 
-
-        const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
+        const { shooter, projectileType, direction, damage, projectileSpeed, lifespan } = payload;
 
         let spawnOffsetMagnitude: number;
-        let projectileScale: number | undefined = undefined;
+        const projectileScale: number | undefined = payload.projectileScale;
 
         if (shooter instanceof PlayerSprite) {
             spawnOffsetMagnitude = 37;
-            projectileScale = shooter.getProjectileScale();
         } else if (shooter instanceof EnemySprite) {
             const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
             const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
@@ -387,21 +387,19 @@ export class GameScene extends Phaser.Scene {
             spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
         }
 
-        // Use shooter's currentStats for projectile properties, with fallbacks from EntitySprite defaults if needed
-        const damage = shooter.currentStats.projectileDamage ?? 10;
-        const speed = shooter.currentStats.projectileSpeed ?? 300;
+        const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
 
         const projectile = new ProjectileSprite(
             this,
             shooter.x + direction.x * spawnOffsetMagnitude,
-            shooter.y + direction.y * spawnOffsetMagnitude, 
+            shooter.y + direction.y * spawnOffsetMagnitude,
             pType,
             shooter.entityId,
-            damage, 
-            speed,  
-            shooter.projectileLifespan, 
-            projectileScale, 
-            this.particleSystem 
+            damage,
+            projectileSpeed,
+            lifespan,
+            projectileScale,
+            this.particleSystem
         );
 
         this.projectiles.add(projectile);
@@ -563,6 +561,11 @@ export class GameScene extends Phaser.Scene {
             this.zoomOut();
         }
 
+        // ADDED: Handle enemy debug toggle
+        if (Phaser.Input.Keyboard.JustDown(this.keyToggleEnemyDebug)) {
+            this.enemyDebugDisplay.toggleVisibility();
+        }
+
         // Update player movement - just handles input and movement
         this.player.updateMovement(this.cursors);
 
@@ -574,6 +577,11 @@ export class GameScene extends Phaser.Scene {
         // Update enemy spawner
         if (this.enemySpawner) {
             this.enemySpawner.update(time, delta);
+        }
+
+        // ADDED: Update enemy debug display
+        if (this.enemies) {
+            this.enemyDebugDisplay.update(this.enemies);
         }
 
         // Y-sorting for player
@@ -635,6 +643,11 @@ export class GameScene extends Phaser.Scene {
     shutdown() {
         if (this.particleSystem) {
             this.particleSystem.destroy();
+        }
+
+        // ADDED: Destroy enemy debug display
+        if (this.enemyDebugDisplay) {
+            this.enemyDebugDisplay.destroy();
         }
 
         // Clean up network connections
@@ -724,7 +737,14 @@ export class GameScene extends Phaser.Scene {
 
         if (!remotePlayer) {
             // Create new remote player sprite
-            remotePlayer = new PlayerSprite(this, position.x, position.y, id, this.particleSystem);
+            remotePlayer = new PlayerSprite(
+                this, 
+                position.x, 
+                position.y, 
+                id, 
+                position.characterId || '1', 
+                this.particleSystem
+            );
 
             // Mark as network controlled
             if (this.networkSystem) {

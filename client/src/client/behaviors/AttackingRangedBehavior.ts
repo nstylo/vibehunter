@@ -50,7 +50,7 @@ export class AttackingRangedBehavior extends BaseBehavior implements IBehavior {
 
     // Check if enemy.rangedAttackRange is defined and target is within it
     if (enemy.rangedAttackRange && distanceToTarget <= enemy.rangedAttackRange) {
-      enemy.attemptAutoShoot(); // attemptAutoShoot is public and manages its own timing/cooldown
+      enemy.attemptAttack('RANGED', new Phaser.Math.Vector2(currentTarget.x, currentTarget.y)); // attemptAutoShoot is public and manages its own timing/cooldown
       // Ranged enemies might stop moving to shoot. Ensure velocity is zero.
       if (enemy.body instanceof Phaser.Physics.Arcade.Body) {
         enemy.body.setVelocity(0, 0);

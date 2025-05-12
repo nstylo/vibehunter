@@ -3,11 +3,21 @@
  */
 
 /**
+ * Interface for position data
+ */
+export interface PlayerPosition {
+    x: number;
+    y: number;
+    characterId?: string;
+}
+
+/**
  * Interface for remote player data received from server
  */
 export interface RemotePlayerData {
     id: string;
-    position: { x: number; y: number };
+    position: PlayerPosition;
+    characterId?: string;
     // Other properties can be added as needed (health, direction, etc.)
 }
 

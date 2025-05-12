@@ -123,20 +123,24 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
 
     // Common methods can be added here, e.g.:
     public takeDamage(amount: number, source?: EntitySprite | ProjectileSprite | string): void {
-        // New minimum damage calculation: minimum 10% of original damage (prevents defense from completely nullifying damage)
-        // Also ensures damage is at least 1
-        const damageAfterDefense = Math.max(Math.ceil(amount * 0.1), amount - (this.currentStats.defense || 0));
-        const actualDamage = Math.min(this.currentStats.hp, damageAfterDefense);
-        this.currentStats.hp -= actualDamage;
+        if (amount <= 0) return; // No damage to take
+
+        // Calculate damage after defense, ensuring at least 1 damage if original amount > 0
+        // and at least 10% of original damage to prevent defense from nullifying too much.
+        const minDamageFromPercentage = Math.ceil(amount * 0.1);
+        const damageAfterDefenseCalc = amount - (this.currentStats.defense || 0);
+        const actualDamageTaken = Math.max(1, minDamageFromPercentage, damageAfterDefenseCalc);
+
+        this.currentStats.hp -= actualDamageTaken;
 
         // Show health bar when damage is taken
         this.showHealthBar();
 
-        this.displayDamageNumber(actualDamage);
+        this.displayDamageNumber(actualDamageTaken);
 
         this.scene.events.emit(EVENT_ENTITY_TAKE_DAMAGE, {
             target: this,
-            damage: actualDamage,
+            damage: actualDamageTaken,
             newHp: this.currentStats.hp,
             source: source
         });
@@ -152,10 +156,10 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
                 duration: 100,
                 yoyo: true,
                 onStart: () => {
-                    if (this.setTint) this.setTint(0xff0000);
+                    if (this.setTint) this.setTint(0xff0000); // Ensure setTint exists
                 },
                 onComplete: () => {
-                    if (this.clearTint) this.clearTint();
+                    if (this.clearTint) this.clearTint(); // Ensure clearTint exists
                     this.alpha = 1.0;
                 }
             });

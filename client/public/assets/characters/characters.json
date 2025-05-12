@@ -2,11 +2,12 @@
   "1": {
     "name": "Hobo Jack",
     "alias": "Broken‑Hero",
-    "origin": "Long‑shoreman who shattered his spine saving a rookie on Pier 80.",
+    "origin": "Long‑shoreman who shattered his spine saving a rookie on Pier 80.",
     "downfall": "Pain‑pill scripts turned to street fentanyl after workers‑comp and VA delays; tech‑boom rent pushed him under the Bay Bridge.",
-    "signature": "Battered bottle used as both club and crutch; hallucinates glowing ‘ghost dollars’ that drive each run.",
-    "virtue": "Uses his last Narcan on strangers, proving there’s a hero under the haze.",
-    "belief_goal": "Snatch one real ghost dollar to ‘square the universe’ and end the pain."
+    "signature": "Battered bottle used as both club and crutch; hallucinates glowing 'ghost dollars' that drive each run.",
+    "virtue": "Uses his last Narcan on strangers, proving there's a hero under the haze.",
+    "belief_goal": "Snatch one real ghost dollar to 'square the universe' and end the pain.",
+    "startingAttacks": ["BATTERED_BOTTLE_CLUB"]
   },
   "2": {
     "name": "Hobo Rita",
@@ -15,7 +16,8 @@
     "downfall": "Evicted for sheltering cats; insomnia led to sleeping‑pill dependence and street life.",
     "signature": "Tote of tattered books and a calico cat named Hemingway; tears pages to knock back foes.",
     "virtue": "Still tries to give every discarded story a proper ending.",
-    "belief_goal": "Finish cataloging the city’s lost tales to reopen a library of hope."
+    "belief_goal": "Finish cataloging the city's lost tales to reopen a library of hope.",
+    "startingAttacks": ["TORN_BOOK_PAGE_THROW"]
   },
   "3": {
     "name": "Courier Sam",
@@ -23,80 +25,89 @@
     "origin": "Fastest food‑app rider in SF, wore neon jacket like superhero armor.",
     "downfall": "Hit‑and‑run shattered his knee; algorithm deactivated him and medical bills ate savings.",
     "signature": "Cracked phone flashes phantom orders spawning coin pickups; limp replaces pedal power.",
-    "virtue": "Helps other down‑and‑outs find shelter between ‘deliveries’.",
-    "belief_goal": "Complete the mythic ‘Tip of Destiny’ order to buy back his future."
+    "virtue": "Helps other down‑and‑outs find shelter between 'deliveries'.",
+    "belief_goal": "Complete the mythic 'Tip of Destiny' order to buy back his future.",
+    "startingAttacks": ["CRACKED_PHONE_ORDER_SPAWN"]
   },
   "4": {
     "name": "Doc Marla",
     "alias": "Street‑Medic",
-    "origin": "Paramedic with 30 years on ambulances.",
-    "downfall": "Hospital merger vaporized her pension; sold home to cover dad’s chemo and ended up curbside.",
+    "origin": "Paramedic with 30 years on ambulances.",
+    "downfall": "Hospital merger vaporized her pension; sold home to cover dad's chemo and ended up curbside.",
     "signature": "Battered first‑aid kit—bandages heal allies, caffeine pills steady her hands.",
     "virtue": "Treats anyone, no questions asked.",
-    "belief_goal": "One good deed per day earns ‘cosmic health insurance’ for all."
+    "belief_goal": "One good deed per day earns 'cosmic health insurance' for all.",
+    "startingAttacks": ["BANDAGE_HEAL_ALLY"]
   },
   "5": {
     "name": "Sax Sid",
-    "alias": "Last Note",
+    "alias": "Last Note",
     "origin": "Jazzman who once opened Coltrane tribute nights.",
     "downfall": "Rent outpaced gigs; pawned everything but his battered alto sax.",
     "signature": "Bleeding‑lip solos release stunning sound‑waves.",
     "virtue": "Music lifts every soul within ear‑shot.",
-    "belief_goal": "Finish his lost composition to hear his late daughter’s smile again."
+    "belief_goal": "Finish his lost composition to hear his late daughter's smile again.",
+    "startingAttacks": ["SAXOPHONE_SOLO_WAVE"]
   },
   "6": {
     "name": "Tincap Tom",
     "alias": "Scrap‑Smith",
     "origin": "Laid‑off aerospace welder who built satellite heat‑shields.",
-    "downfall": "Factory outsourced overnight; 401(k) frozen and skills deemed ‘too expensive’.",
+    "downfall": "Factory outsourced overnight; 401(k) frozen and skills deemed 'too expensive'.",
     "signature": "Stock‑pot helmet and rusted wrench forge junk traps.",
     "virtue": "Repairs community generators for free.",
-    "belief_goal": "One perfect cardboard blueprint will send his regrets into orbit."
+    "belief_goal": "One perfect cardboard blueprint will send his regrets into orbit.",
+    "startingAttacks": ["RUSTED_WRENCH_SMACK"]
   },
   "7": {
     "name": "Mudshoe Mike",
-    "alias": "Barefoot Trailblazer",
+    "alias": "Barefoot Trailblazer",
     "origin": "National‑park ranger fired after exposing illegal logging.",
     "downfall": "Swore off shoes the day he lost his badge; endless trek into the city.",
     "signature": "Muddy footprints slow enemies; rain‑dance doubles the mess.",
     "virtue": "Guides lost campers back to safety.",
-    "belief_goal": "Plant one last redwood and regrow what was stolen."
+    "belief_goal": "Plant one last redwood and regrow what was stolen.",
+    "startingAttacks": ["MUDDY_FOOTPRINT_TRAP"]
   },
   "8": {
     "name": "Knuckle Joe",
-    "alias": "Glass‑Jaw Gentleman",
-    "origin": "Amateur boxer who threw a fight to pay his daughter’s surgery bill.",
+    "alias": "Glass‑Jaw Gentleman",
+    "origin": "Amateur boxer who threw a fight to pay his daughter's surgery bill.",
     "downfall": "Banned from the ring, teeth knocked out, spiraled into street bouts.",
     "signature": "Permanent tape‑wrap fists; combo meter unleashes shockwaves.",
-    "virtue": "Won’t strike first—only defends the weak.",
-    "belief_goal": "Buy a house for his daughter with prize money from one last imaginary bout."
+    "virtue": "Won't strike first—only defends the weak.",
+    "belief_goal": "Buy a house for his daughter with prize money from one last imaginary bout.",
+    "startingAttacks": ["KNUCKLE_SHOCKWAVE"]
   },
   "9": {
     "name": "Bottle‑Bag Rosa",
-    "alias": "Recycling Matriarch",
+    "alias": "Recycling Matriarch",
     "origin": "Ran a family corner store demolished by a mega‑chain.",
-    "downfall": "Refused to leave neighborhood—now collects bottles to ‘take her aisle back’.",
+    "downfall": "Refused to leave neighborhood—now collects bottles to 'take her aisle back'.",
     "signature": "Bottomless burlap sack rattling with cans that become shrapnel.",
-    "virtue": "Trades recyclables for kids’ drawings, pins them inside the sack.",
-    "belief_goal": "Fill the sack ‘til it glows green and fund a community garden."
+    "virtue": "Trades recyclables for kids' drawings, pins them inside the sack.",
+    "belief_goal": "Fill the sack 'til it glows green and fund a community garden.",
+    "startingAttacks": ["CAN_SHRAPNEL_TOSS"]
   },
   "10": {
     "name": "Cinders McGraw",
     "alias": "Lantern‑Keeper",
-    "origin": "Railroad brakeman of 25 years.",
+    "origin": "Railroad brakeman of 25 years.",
     "downfall": "Automation upgrade, then boxcar fire scarred his lungs.",
     "signature": "Eternal rail‑yard lantern burns enemies and reveals loot.",
     "virtue": "Guides wanderers through fog like trains of old.",
-    "belief_goal": "Keep flame alive until ghost locomotive arrives to carry lost souls home."
+    "belief_goal": "Keep flame alive until ghost locomotive arrives to carry lost souls home.",
+    "startingAttacks": ["LANTERN_BURN_AOE"]
   },
   "11": {
     "name": "Garbage‑Bag Greta",
-    "alias": "Midnight Forager",
+    "alias": "Midnight Forager",
     "origin": "Botanical illustrator poisoned by years of toxic inks.",
     "downfall": "Vision dimmed; cloaked in trash‑bag to comb streets for edible plants.",
     "signature": "Scoops junk then flings it; sprouts healing plants on impact.",
     "virtue": "Feeds the hungry with sidewalk salads.",
-    "belief_goal": "Sketch one perfect flower to bring color—and the raccoon’s true name—back."
+    "belief_goal": "Sketch one perfect flower to bring color—and the raccoon's true name—back.",
+    "startingAttacks": ["JUNK_FLING"]
   },
   "12": {
     "name": "Wi‑Fi Will",
@@ -105,44 +116,49 @@
     "downfall": "Shares worthless; clings to busted laptop flickering with secret code.",
     "signature": "Hijacks stray Wi‑Fi, spawning digital glyph projectiles.",
     "virtue": "Patches community routers for warmth and bandwidth.",
-    "belief_goal": "Debug city’s source code and grant every hobo admin rights to hope."
+    "belief_goal": "Debug city's source code and grant every hobo admin rights to hope.",
+    "startingAttacks": ["WIFI_GLYPH_SHOT"]
   },
   "13": {
     "name": "Influencer Ivy",
-    "alias": "Stream‑Queen Offline",
+    "alias": "Stream‑Queen Offline",
     "origin": "Lifestyle star living off sponsorships and #vanlife hype.",
     "downfall": "Algorithm buried her; savings gone chasing one more viral clip.",
-    "signature": "Cracked selfie‑stick flash blinds & ‘cancels’ foes.",
+    "signature": "Cracked selfie‑stick flash blinds & 'cancels' foes.",
     "virtue": "Live‑streams charity pop‑ups even when no one watches.",
-    "belief_goal": "Record the perfect comeback clip to reclaim ten million hearts."
+    "belief_goal": "Record the perfect comeback clip to reclaim ten million hearts.",
+    "startingAttacks": ["SELFIE_STICK_FLASH"]
   },
   "14": {
     "name": "Crypto Chad",
     "alias": "Bag‑Holder",
-    "origin": "Tech‑bro day‑trader preaching ‘financial freedom’.",
+    "origin": "Tech‑bro day‑trader preaching 'financial freedom'.",
     "downfall": "Leverage imploded in bear market; hardware wallet now a necklace.",
     "signature": "Phone chart launches coin projectiles that moon or bust randomly.",
     "virtue": "Teaches others cold‑wallet safety for free.",
-    "belief_goal": "Catch the next green candle and moon off the streets."
+    "belief_goal": "Catch the next green candle and moon off the streets.",
+    "startingAttacks": ["CRYPTO_COIN_FLIP_SHOT"]
   },
   "15": {
     "name": "PhD Penny",
-    "alias": "Adjunct Avenger",
+    "alias": "Adjunct Avenger",
     "origin": "Triple‑degreed scholar drowning in loans.",
     "downfall": "Adjunct contract axed in campus cuts; debt snowballed.",
     "signature": "Flings citation pages that expose enemy weaknesses.",
     "virtue": "Runs free sidewalk lectures on critical thought.",
-    "belief_goal": "Write the footnote that erases her debt and saves public education."
+    "belief_goal": "Write the footnote that erases her debt and saves public education.",
+    "startingAttacks": ["CITATION_PAGE_DEBUFF"]
   },
   "16": {
     "name": "Console Carl",
-    "alias": "AFK Nomad",
-    "origin": "MMO addict with 30 k hours logged.",
+    "alias": "AFK Nomad",
+    "origin": "MMO addict with 30 k hours logged.",
     "downfall": "Evicted after XP grind trumped real rent grind.",
     "signature": "Handheld emits combo blasts the longer he stands still.",
     "virtue": "Shares power banks with phone‑less peers.",
-    "belief_goal": "Beat the hidden final boss cartridge labeled ‘Home’.",
-    "notes": "Movement breaks streak—true to his sedentary stereotype."
+    "belief_goal": "Beat the hidden final boss cartridge labeled 'Home'.",
+    "notes": "Movement breaks streak—true to his sedentary stereotype.",
+    "startingAttacks": ["HANDHELD_COMBO_BLAST"]
   },
   "17": {
     "name": "Wall‑Street Walt",
@@ -151,33 +167,37 @@
     "downfall": "One toxic derivative nuked pensions—his own included.",
     "signature": "Foreclosure papers thrown like paper shurikens shaking wallets loose.",
     "virtue": "Gives pro‑bono tax tips to tent‑mates.",
-    "belief_goal": "Staple shredded Fortune cover whole and reopen the bull market on his soul."
+    "belief_goal": "Staple shredded Fortune cover whole and reopen the bull market on his soul.",
+    "startingAttacks": ["FORECLOSURE_PAPER_SHURIKEN"]
   },
   "18": {
     "name": "Vet Vic",
-    "alias": "Ghost Platoon",
+    "alias": "Ghost Platoon",
     "origin": "Combat veteran with prosthetic leg and dog‑tags.",
     "downfall": "Lost limb to IED; VA backlog left him stranded.",
     "signature": "Crutch taps call down ghost mortar fire.",
     "virtue": "Checks on other vets nightly despite PTSD.",
-    "belief_goal": "Salute at dawn to reunite with fallen squad in peaceful after‑action."
+    "belief_goal": "Salute at dawn to reunite with fallen squad in peaceful after‑action.",
+    "startingAttacks": ["CRUTCH_MORTAR_CALL"]
   },
   "19": {
     "name": "Tin‑Foil Terry",
-    "alias": "Signal Seeker",
-    "origin": "Radio tech who chased ‘the signal’ too far.",
+    "alias": "Signal Seeker",
+    "origin": "Radio tech who chased 'the signal' too far.",
     "downfall": "Conspiracy rants cost him job and home.",
     "signature": "5G‑LIES placard sends AI‑scrambling shockwaves; foil hat blocks status debuffs.",
     "virtue": "Fixes broken transistor radios for kids.",
-    "belief_goal": "Decode final numbers burst and free everyone from debt via satellite wipe."
+    "belief_goal": "Decode final numbers burst and free everyone from debt via satellite wipe.",
+    "startingAttacks": ["PLACARD_SHOCKWAVE_5G"]
   },
   "20": {
     "name": "Namaste Nina",
-    "alias": "Zen Nomad",
+    "alias": "Zen Nomad",
     "origin": "Wellness guru who lost her upscale yoga studio to rent hike.",
-    "downfall": "Spiritual teachings couldn’t cover triple rent; now barefoot on pavements.",
-    "signature": "Mat twirls leave calming ripples; ‘om’ breath knocks back foes.",
-    "virtue": "Offers street yoga sessions to relieve others’ angst.",
-    "belief_goal": "Complete 108 sidewalk salutations to open a portal to communal peace."
+    "downfall": "Spiritual teachings couldn't cover triple rent; now barefoot on pavements.",
+    "signature": "Mat twirls leave calming ripples; 'om' breath knocks back foes.",
+    "virtue": "Offers street yoga sessions to relieve others' angst.",
+    "belief_goal": "Complete 108 sidewalk salutations to open a portal to communal peace.",
+    "startingAttacks": ["MAT_TWIRL_RIPPLE"]
   }
 }

@@ -1,0 +1,526 @@
+[
+  {
+    "id": "FIST_PUNCH",
+    "name": "Fist Punch",
+    "type": "MELEE",
+    "damage": 8,
+    "attackCooldown": 600,
+    "range": 80,
+    "hitSoundKey": "sfx_punch_hit"
+  },
+  {
+    "id": "BATTERED_BOTTLE_CLUB",
+    "name": "Battered Bottle",
+    "type": "MELEE",
+    "damage": 12,
+    "attackCooldown": 800,
+    "range": 120,
+    "hitParticleEffect": "glassShard",
+    "hitSoundKey": "sfx_bottle_smash_melee"
+  },
+  {
+    "id": "TORN_BOOK_PAGE_THROW",
+    "name": "Torn Book Page",
+    "type": "RANGED",
+    "damage": 7,
+    "attackCooldown": 700,
+    "range": 200,
+    "projectileType": "PAPER_PROJECTILE",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_paper_hit"
+  },
+  {
+    "id": "CRACKED_PHONE_ORDER_SPAWN",
+    "name": "Phantom Order",
+    "type": "RANGED",
+    "damage": 10,
+    "attackCooldown": 1000,
+    "range": 250,
+    "projectileType": "GHOST_COIN",
+    "projectilesPerShot": 3,
+    "spreadAngle": 15,
+    "hitSoundKey": "sfx_coin_hit"
+  },
+  {
+    "id": "BANDAGE_HEAL_ALLY",
+    "name": "Healing Bandage",
+    "type": "SUPPORT",
+    "healAmount": 15,
+    "attackCooldown": 1500,
+    "range": 100,
+    "targetType": "ALLY",
+    "hitParticleEffect": "healSparkle",
+    "hitSoundKey": "sfx_bandage_apply"
+  },
+  {
+    "id": "CAFFEINE_PILL_SELF",
+    "name": "Caffeine Pill",
+    "type": "BUFF_SELF",
+    "attackCooldown": 20000,
+    "statusEffectOnSelf": {
+      "effectType": "ATTACK_SPEED_BUFF_TEMP",
+      "duration": 10000,
+      "potency": 0.20
+    },
+    "hitSoundKey": "sfx_pill_swallow"
+  },
+  {
+    "id": "SAXOPHONE_SOLO_WAVE",
+    "name": "Sax Solo Wave",
+    "type": "RANGED",
+    "damage": 15,
+    "attackCooldown": 1200,
+    "range": 180,
+    "projectileType": "SOUND_WAVE",
+    "projectilesPerShot": 1,
+    "areaOfEffect": {
+      "shape": "CONE",
+      "width": 90,
+      "height": 180
+    },
+    "hitParticleEffect": "soundwaveImpact",
+    "hitSoundKey": "sfx_sax_blast"
+  },
+  {
+    "id": "RUSTED_WRENCH_SMACK",
+    "name": "Rusted Wrench",
+    "type": "MELEE",
+    "damage": 14,
+    "attackCooldown": 900,
+    "range": 95,
+    "hitSoundKey": "sfx_metal_impact"
+  },
+  {
+    "id": "MUDDY_FOOTPRINT_TRAP",
+    "name": "Muddy Footprint",
+    "type": "RANGED_AREA_DENIAL",
+    "damage": 5,
+    "attackCooldown": 1500,
+    "range": 100,
+    "projectileType": "MUD_PATCH",
+    "duration": 8000,
+    "statusEffectOnHit": {
+      "effectType": "SLOW_TIER_1",
+      "duration": 3000
+    },
+    "hitSoundKey": "sfx_mud_splat"
+  },
+  {
+    "id": "KNUCKLE_SHOCKWAVE",
+    "name": "Knuckle Shockwave",
+    "type": "MELEE",
+    "damage": 20,
+    "attackCooldown": 1000,
+    "range": 100,
+    "areaOfEffect": {
+      "shape": "CIRCLE",
+      "radius": 100
+    },
+    "hitParticleEffect": "groundCrack",
+    "hitSoundKey": "sfx_ground_punch"
+  },
+  {
+    "id": "CAN_SHRAPNEL_TOSS",
+    "name": "Can Shrapnel",
+    "type": "RANGED",
+    "damage": 6,
+    "attackCooldown": 750,
+    "range": 220,
+    "projectileType": "CAN_SHARD",
+    "projectilesPerShot": 5,
+    "spreadAngle": 30,
+    "hitSoundKey": "sfx_can_hit"
+  },
+  {
+    "id": "LANTERN_BURN_AOE",
+    "name": "Lantern Burn",
+    "type": "MELEE_AREA_CONTINUOUS",
+    "damage": 4,
+    "tickRate": 500,
+    "attackCooldown": 0,
+    "range": 80,
+    "areaOfEffect": {
+      "shape": "CIRCLE",
+      "radius": 80
+    },
+    "hitParticleEffect": "flameContinuous",
+    "hitSoundKey": "sfx_lantern_burn_loop",
+    "statusEffectOnHit": {
+        "effectType": "DAMAGE_OVER_TIME_EFFECT",
+        "customData": { "damagePerTick": 2},
+        "duration": 2000,
+        "tickRate": 500
+    }
+  },
+  {
+    "id": "JUNK_FLING",
+    "name": "Junk Fling",
+    "type": "RANGED",
+    "damage": 9,
+    "attackCooldown": 850,
+    "range": 190,
+    "projectileType": "TRASH_BALL",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_trash_hit"
+  },
+  {
+    "id": "WIFI_GLYPH_SHOT",
+    "name": "Wi-Fi Glyph",
+    "type": "RANGED",
+    "damage": 11,
+    "attackCooldown": 950,
+    "range": 300,
+    "projectileType": "DIGITAL_GLYPH",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_digital_impact"
+  },
+  {
+    "id": "SELFIE_STICK_FLASH",
+    "name": "Selfie Flash",
+    "type": "MELEE",
+    "damage": 5,
+    "attackCooldown": 1300,
+    "range": 120,
+    "areaOfEffect": {
+      "shape": "CONE",
+      "width": 140,
+      "height": 120
+    },
+    "hitParticleEffect": "cameraFlash",
+    "hitSoundKey": "sfx_camera_flash",
+    "statusEffectOnHit": {
+      "effectType": "STUN_SHORT",
+      "duration": 1000
+    }
+  },
+  {
+    "id": "CRYPTO_COIN_FLIP_SHOT",
+    "name": "Coin Flip Shot",
+    "type": "RANGED",
+    "damage": 1,
+    "attackCooldown": 1000,
+    "range": 280,
+    "projectileType": "CRYPTO_COIN",
+    "projectilesPerShot": 1,
+    "notes": "Damage might be modified by script to be random (moon or bust)",
+    "hitSoundKey": "sfx_crypto_coin_hit"
+  },
+  {
+    "id": "CITATION_PAGE_DEBUFF",
+    "name": "Citation Page",
+    "type": "RANGED",
+    "damage": 3,
+    "attackCooldown": 1100,
+    "range": 260,
+    "projectileType": "PAPER_PROJECTILE",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "DEFENSE_DOWN_TIER_1",
+      "duration": 5000,
+      "potency": 0.15
+    },
+    "hitSoundKey": "sfx_paper_hit"
+  },
+  {
+    "id": "HANDHELD_COMBO_BLAST",
+    "name": "Handheld Combo",
+    "type": "RANGED",
+    "damage": 25,
+    "attackCooldown": 500,
+    "range": 350,
+    "projectileType": "ENERGY_BLAST",
+    "notes": "Damage/Effectiveness might scale with standing still time",
+    "hitParticleEffect": "energyBlastImpact",
+    "hitSoundKey": "sfx_game_blast"
+  },
+  {
+    "id": "FORECLOSURE_PAPER_SHURIKEN",
+    "name": "Foreclosure Shuriken",
+    "type": "RANGED",
+    "damage": 9,
+    "attackCooldown": 700,
+    "range": 320,
+    "projectileType": "PAPER_SHURIKEN",
+    "projectilesPerShot": 3,
+    "spreadAngle": 10,
+    "hitSoundKey": "sfx_paper_throw_sharp"
+  },
+  {
+    "id": "CRUTCH_MORTAR_CALL",
+    "name": "Ghost Mortar",
+    "type": "RANGED_TARGETED_AOE",
+    "damage": 30,
+    "attackCooldown": 2500,
+    "range": 500,
+    "areaOfEffect": {
+      "shape": "CIRCLE",
+      "radius": 80
+    },
+    "delayBeforeImpact": 1000,
+    "hitParticleEffect": "explosionGround",
+    "hitSoundKey": "sfx_mortar_impact"
+  },
+  {
+    "id": "PLACARD_SHOCKWAVE_5G",
+    "name": "5G Lies Shockwave",
+    "type": "MELEE",
+    "damage": 7,
+    "attackCooldown": 1800,
+    "range": 150,
+    "areaOfEffect": {
+      "shape": "CIRCLE",
+      "radius": 150
+    },
+    "hitParticleEffect": "staticDischarge",
+    "hitSoundKey": "sfx_static_shockwave",
+    "statusEffectOnHit": {
+      "effectType": "CONFUSE_SHORT",
+      "duration": 2000
+    }
+  },
+  {
+    "id": "MAT_TWIRL_RIPPLE",
+    "name": "Mat Twirl",
+    "type": "MELEE",
+    "damage": 6,
+    "attackCooldown": 900,
+    "range": 110,
+    "areaOfEffect": {
+        "shape": "CIRCLE",
+        "radius": 110
+    },
+    "hitParticleEffect": "calmingRipple",
+    "hitSoundKey": "sfx_mat_whoosh",
+    "statusEffectOnHit": {
+        "effectType": "SLOW_TIER_1",
+        "duration": 1500
+    }
+  },
+  {
+    "id": "OM_BREATH_KNOCKBACK",
+    "name": "Om Breath",
+    "type": "RANGED",
+    "damage": 2,
+    "attackCooldown": 1200,
+    "range": 150,
+    "projectileType": "AIR_GUST",
+    "knockbackForce": 100,
+    "hitParticleEffect": "windPuff",
+    "hitSoundKey": "sfx_om_breath"
+  },
+  {
+    "id": "ENEMY_BULLET_SHOT",
+    "name": "Enemy Bullet",
+    "type": "RANGED",
+    "damage": 10,
+    "attackCooldown": 1000,
+    "range": 300,
+    "projectileType": "BULLET",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_bullet_hit"
+  },
+  {
+    "id": "ENEMY_PEPPER_SPRAY",
+    "name": "Enemy Pepper Spray",
+    "type": "RANGED",
+    "damage": 5,
+    "attackCooldown": 1600,
+    "range": 200,
+    "projectileType": "PEPPER_SPRAY",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "STUN_SHORT",
+      "duration": 1000
+    },
+    "hitSoundKey": "sfx_spray_hit"
+  },
+  {
+    "id": "ENEMY_PUDDLE_TOSS",
+    "name": "Enemy Puddle",
+    "type": "RANGED_AREA_DENIAL",
+    "damage": 3,
+    "attackCooldown": 1400,
+    "range": 150,
+    "projectileType": "PUDDLE",
+    "duration": 7000,
+    "statusEffectOnHit": {
+      "effectType": "SLOW_TIER_1",
+      "duration": 3000
+    },
+    "hitSoundKey": "sfx_puddle_hit"
+  },
+  {
+    "id": "ENEMY_SYRINGE_TOSS",
+    "name": "Enemy Syringe",
+    "type": "RANGED",
+    "damage": 8,
+    "attackCooldown": 1200,
+    "range": 250,
+    "projectileType": "SYRINGE",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "POISON_DOT_TIER_1",
+      "duration": 3000,
+      "potency": 2
+    },
+    "hitSoundKey": "sfx_syringe_hit"
+  },
+  {
+    "id": "ENEMY_FLAME_JET",
+    "name": "Enemy Flame Jet",
+    "type": "RANGED",
+    "damage": 7,
+    "attackCooldown": 1600,
+    "range": 180,
+    "projectileType": "FLAME",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+        "effectType": "DAMAGE_OVER_TIME_EFFECT",
+        "customData": { "damagePerTick": 3},
+        "duration": 2000,
+        "tickRate": 500
+    },
+    "hitSoundKey": "sfx_flame_hit"
+  },
+  {
+    "id": "ENEMY_TICKET_FLICK",
+    "name": "Enemy Ticket Flick",
+    "type": "RANGED",
+    "damage": 6,
+    "attackCooldown": 1600,
+    "range": 180,
+    "projectileType": "TICKET",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_paper_hit"
+  },
+  {
+    "id": "ENEMY_SHOUT_WAVE",
+    "name": "Enemy Shout",
+    "type": "RANGED",
+    "damage": 5,
+    "attackCooldown": 2000,
+    "range": 220,
+    "projectileType": "SHOUT",
+    "projectilesPerShot": 1,
+    "knockbackForce": 50,
+    "hitSoundKey": "sfx_shout_hit"
+  },
+  {
+    "id": "ENEMY_TASER_SHOT",
+    "name": "Enemy Taser",
+    "type": "RANGED",
+    "damage": 10,
+    "attackCooldown": 1800,
+    "range": 250,
+    "projectileType": "TASER",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "STUN_SHORT",
+      "duration": 1200
+    },
+    "hitSoundKey": "sfx_electric_hit"
+  },
+  {
+    "id": "ENEMY_FLASHLIGHT_BEAM",
+    "name": "Enemy Flashlight",
+    "type": "RANGED",
+    "damage": 4,
+    "attackCooldown": 1700,
+    "range": 320,
+    "projectileType": "FLASHLIGHT_BEAM",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "SLOW_TIER_1",
+      "duration": 2000
+    },
+    "hitSoundKey": "sfx_flash_hit"
+  },
+  {
+    "id": "ENEMY_LID_TOSS",
+    "name": "Enemy Lid Toss",
+    "type": "RANGED",
+    "damage": 12,
+    "attackCooldown": 1900,
+    "range": 240,
+    "projectileType": "LID_TOSS",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_lid_hit"
+  },
+  {
+    "id": "ENEMY_TEXTBOOK_THROW",
+    "name": "Enemy Textbook",
+    "type": "RANGED",
+    "damage": 9,
+    "attackCooldown": 1300,
+    "range": 280,
+    "projectileType": "TEXTBOOK",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_book_hit"
+  },
+  {
+    "id": "ENEMY_HOSE_SPRAY",
+    "name": "Enemy Hose Spray",
+    "type": "RANGED",
+    "damage": 7,
+    "attackCooldown": 2000,
+    "range": 250,
+    "projectileType": "HOSE_SPRAY",
+    "projectilesPerShot": 1,
+    "knockbackForce": 70,
+    "statusEffectOnHit": {
+      "effectType": "SLOW_TIER_1",
+      "duration": 2500
+    },
+    "hitSoundKey": "sfx_water_spray_hit"
+  },
+  {
+    "id": "ENEMY_TRANQ_DART",
+    "name": "Enemy Tranq Dart",
+    "type": "RANGED",
+    "damage": 5,
+    "attackCooldown": 1800,
+    "range": 300,
+    "projectileType": "TRANQUILIZER_DART",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "SLOW_TIER_1",
+      "duration": 4000
+    },
+    "hitSoundKey": "sfx_dart_hit"
+  },
+  {
+    "id": "ENEMY_SNARE_TRAP",
+    "name": "Enemy Snare",
+    "type": "RANGED",
+    "damage": 6,
+    "attackCooldown": 1700,
+    "range": 200,
+    "projectileType": "SNARE",
+    "projectilesPerShot": 1,
+    "statusEffectOnHit": {
+      "effectType": "STUN_SHORT",
+      "duration": 1800
+    },
+    "hitSoundKey": "sfx_snare_hit"
+  },
+  {
+    "id": "ENEMY_BOTTLE_THROW",
+    "name": "Enemy Bottle Throw",
+    "type": "RANGED",
+    "damage": 8,
+    "attackCooldown": 2200,
+    "range": 280,
+    "projectileType": "BOTTLE",
+    "projectilesPerShot": 1,
+    "hitSoundKey": "sfx_bottle_shatter"
+  },
+  {
+    "id": "GENERIC_MELEE_SWIPE",
+    "name": "Melee Swipe",
+    "type": "MELEE",
+    "damage": 10,
+    "attackCooldown": 1000,
+    "range": 100,
+    "hitSoundKey": "sfx_swipe_hit"
+  }
+] 

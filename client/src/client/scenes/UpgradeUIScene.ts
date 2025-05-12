@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { UpgradeChoice } from '../../common/PlayerStats';
 import type { ProgressionSystem } from '../systems/ProgressionSystem';
 
-const MAIN_GAME_SCENE_KEY = 'GameScene'; // Still needed for context if other interactions were present
 const UPGRADE_FONT_FAMILY = 'Arial';
 
 export class UpgradeUIScene extends Phaser.Scene {
@@ -19,6 +18,12 @@ export class UpgradeUIScene extends Phaser.Scene {
         this.progressionSystem = data.progressionSystem;
         this.currentLevel = data.level;
 
+        // Check if there are any choices
+        if (this.choices.length === 0) {
+            console.warn('No upgrade choices available for level up UI');
+            // We'll handle this in create()
+        }
+
         // Don't pause the game, just make sure this scene is on top
         this.scene.bringToTop();
     }
@@ -29,11 +34,6 @@ export class UpgradeUIScene extends Phaser.Scene {
         // Set the camera to ignore the game's camera movement
         this.cameras.main.setScroll(0, 0);
 
-        // Adjust title and card positions with more spacing
-        const titleYPosition = 80; // Move down for more space from top
-        const levelTextYPosition = titleYPosition + 60; // More space below title
-        const cardsYPosition = levelTextYPosition + 100; // More space below level text
-
         // Add a drop shadow effect for better readability without background
         const dropShadow = {
             offsetX: 2,
@@ -42,6 +42,11 @@ export class UpgradeUIScene extends Phaser.Scene {
             blur: 4,
             fill: true
         };
+
+        // Adjust title and card positions with more spacing
+        const titleYPosition = 80; // Move down for more space from top
+        const levelTextYPosition = titleYPosition + 60; // More space below title
+        const cardsYPosition = levelTextYPosition + 100; // More space below level text
 
         // Main title - bigger and with shadow
         const titleText = this.add.text(
@@ -59,6 +64,49 @@ export class UpgradeUIScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
             .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
+
+        // If there are no choices, show a message and auto-close after a delay
+        if (this.choices.length === 0) {
+            const noChoicesText = this.add.text(
+                cam.centerX,
+                cam.centerY,
+                'No upgrades available right now.',
+                {
+                    fontFamily: UPGRADE_FONT_FAMILY,
+                    fontSize: '32px',
+                    color: '#ffffff',
+                    fontStyle: 'bold',
+                    align: 'center',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
+                .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
+                
+            // Add a level text
+            this.add.text(
+                cam.centerX,
+                levelTextYPosition,
+                `You reached Level ${this.currentLevel}!`,
+                {
+                    fontFamily: UPGRADE_FONT_FAMILY,
+                    fontSize: '28px',
+                    color: '#ffffff',
+                    fontStyle: 'bold',
+                    align: 'center',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
+                .setShadow(dropShadow.offsetX, dropShadow.offsetY, dropShadow.color, dropShadow.blur, dropShadow.fill);
+                
+            // Auto-close after a delay
+            this.time.delayedCall(2000, () => {
+                this.progressionSystem.resumeGameAfterUpgrade();
+            });
+            
+            return;
+        }
 
         // Level information - larger with shadow
         const levelInfoText = this.add.text(

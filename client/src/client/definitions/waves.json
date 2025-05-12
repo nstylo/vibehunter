@@ -3,6 +3,7 @@
         "waveNumber": 1,
         "waveStartMessage": "Wave 1: First Encounters!",
         "enemyGroups": [
+            { "enemyType": "caffeine_rookie", "count": 5, "spawnInterval": 900, "spawnDelay": 1000 },
             { "enemyType": "patrol_cop", "count": 8, "spawnInterval": 1200 }, 
             { "enemyType": "court_runner", "count": 2, "spawnInterval": 2000, "spawnDelay": 2500 },
             { "enemyType": "nodding_junkie", "count": 2, "spawnInterval": 1500, "spawnDelay": 4000 },

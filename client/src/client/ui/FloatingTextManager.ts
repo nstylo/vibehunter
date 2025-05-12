@@ -21,7 +21,7 @@ export class FloatingTextManager {
             strokeThickness: 3
         });
         textObject.setOrigin(0.5, 1); // Origin at bottom-center for upward float
-        textObject.setDepth(1000); // Ensure it's above other game elements
+        textObject.setDepth(9999); // Set a very high depth to ensure it's on top
 
         scene.tweens.add({
             targets: textObject,
@@ -48,7 +48,7 @@ export class FloatingTextManager {
         if (amount <= 0) return;
 
         // Choose color and size based on critical status
-        const color = isCritical ? '#ffa500' : '#ff0000'; // Orange for critical, red for normal
+        const color = isCritical ? '#ff0000' : '#ffffff'; // Red for critical, White for normal
         const fontSize = isCritical ? '24px' : '20px'; // Larger font for critical hits
         const textSuffix = isCritical ? '!' : ''; // Add exclamation for critical hits
 

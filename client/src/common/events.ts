@@ -36,6 +36,11 @@ export enum GameEvent {
 
     // Scene Management Events (Example, adjust as needed)
     GAME_OVER = 'gameOver',                              // Could be emitted when the player dies to signal game over sequence.
+    
+    // Pause Menu Events
+    PAUSE_GAME = 'pauseGame',                            // Emitted to pause the game
+    RESUME_GAME = 'resumeGame',                          // Emitted to resume the game
+    QUIT_TO_MENU = 'quitToMenu',                         // Emitted to quit the game and return to menu
 
     // Input System Events (Example)
     // DEBUG_TOGGLE_PRESSED = 'debugTogglePressed',      // Example if InputController emitted events instead of direct checks.

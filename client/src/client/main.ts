@@ -6,10 +6,11 @@ import { GameScene } from './scenes/GameScene';
 import HudScene from './ui/HudScene';
 import { UpgradeUIScene } from './ui/UpgradeUIScene';
 import GameOverScene from './ui/GameOverScene';
+import { PauseMenuScene } from './ui/PauseMenuScene';
 
 const game = new Phaser.Game({
     ...phaserConfig,
-    scene: [BootScene, LobbyScene, GameScene, HudScene, UpgradeUIScene, GameOverScene] 
+    scene: [BootScene, LobbyScene, GameScene, HudScene, UpgradeUIScene, GameOverScene, PauseMenuScene] 
 });
 
 export default game; 

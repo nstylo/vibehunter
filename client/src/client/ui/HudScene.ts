@@ -113,6 +113,9 @@ export default class HudScene extends Phaser.Scene {
     }
 
     private handleUpdateHud(data: { hp?: number, maxHp?: number, currentXp?: number, nextLevelXp?: number, level?: number, killCount?: number }) {
+        // Only process updates if scene is active and ready
+        if (!this.scene.isActive()) return;
+
         if (data.currentXp !== undefined && data.nextLevelXp !== undefined) {
             this.currentXp = data.currentXp;
             this.nextLevelXp = data.nextLevelXp;
@@ -121,16 +124,21 @@ export default class HudScene extends Phaser.Scene {
 
         if (data.level !== undefined) {
             this.currentLevel = data.level;
-            this.levelText.setText(`Level: ${this.currentLevel}`);
+            if (this.levelText) {
+                this.levelText.setText(`Level: ${this.currentLevel}`);
+            }
         }
 
         if (data.killCount !== undefined) {
-            this.killCountText.setText(`Kills: ${data.killCount}`);
+            if (this.killCountText) {
+                this.killCountText.setText(`Kills: ${data.killCount}`);
+            }
         }
     }
 
     private updateXpBar() {
         // Update the XP text
+        if (!this.xpText) return; // Add safety check for xpText
         this.xpText.setText(`${this.currentXp}/${this.nextLevelXp}`);
 
         // Calculate the width of the XP fill bar based on current/next XP
@@ -138,6 +146,9 @@ export default class HudScene extends Phaser.Scene {
         const fillWidth = (this.currentXp / this.nextLevelXp) * maxWidth;
         
         // Animate the XP bar fill
+        // Add safety check for xpBarFill and tweens
+        if (!this.xpBarFill || !this.tweens) return;
+        
         this.tweens.killTweensOf(this.xpBarFill);
         this.tweens.add({
             targets: this.xpBarFill,

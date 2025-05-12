@@ -107,6 +107,8 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
 
     // Common methods can be added here, e.g.:
     public takeDamage(amount: number, source?: EntitySprite | ProjectileSprite | string, isCritical = false): void {
+        if (!this.active || this.currentStats.hp <= 0) return;
+
         if (amount <= 0) return; // No damage to take
 
         // Calculate damage after defense, ensuring at least 1 damage if original amount > 0
@@ -158,6 +160,8 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     protected die(killer?: EntitySprite | ProjectileSprite | string): void {
+        if (!this.active) return;
+
         // Remove health bar using the manager
         HealthBarManager.removeHealthBar(this.entityId);
         
@@ -434,6 +438,9 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     protected recalculateStats(): void {
+        // Store current HP before recalculating
+        const currentHp = this.currentStats.hp;
+
         // Reset currentStats to a copy of baseStats
         this.currentStats = { ...this.baseStats };
 
@@ -461,10 +468,12 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
                 }
             }
         }
-        // HP specific clamping
-        if (typeof this.currentStats.maxHp === 'number') {
-            this.currentStats.hp = Math.min(this.currentStats.hp, this.currentStats.maxHp);
-        }
+        
+        // Restore the stored HP, ensuring it doesn't exceed maxHp
+        // This prevents auto-healing when maxHp increases
+        this.currentStats.hp = Math.min(currentHp, this.currentStats.maxHp);
+        
+        // Ensure HP doesn't go below 0
         this.currentStats.hp = Math.max(0, this.currentStats.hp);
 
         this.updateHealthBar(); 

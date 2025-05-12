@@ -15,7 +15,7 @@ import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } f
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
 import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
 import { HitboxCollisionManager } from '../world/HitboxCollisionManager'; // ADDED
-import { EnemyDebugDisplay } from '../debug/EnemyDebugDisplay'; // ADDED: Import for EnemyDebugDisplay
+import { EnemyDebugDisplay, PlayerDebugDisplay } from '../debug'; // UPDATED: Import debug displays from index
 // New imports for modular components
 import { CameraManager } from '../camera/CameraManager';
 import { InputController } from '../input/InputController';
@@ -27,6 +27,7 @@ import {
     handleEnemyCollideEnemy
 } from '../eventHandlers/collisionHandlers';
 import { FloatingTextManager } from '../ui/FloatingTextManager';
+import { PauseMenuScene } from '../ui/PauseMenuScene'; // Import PauseMenuScene
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -41,7 +42,6 @@ interface GameSceneData {
 
 export class GameScene extends Phaser.Scene {
     player: PlayerSprite | undefined;
-    cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
     private enemies!: Phaser.Physics.Arcade.Group; // Enemy group
     private projectiles!: Phaser.Physics.Arcade.Group; // Projectile group
     private xpOrbs!: Phaser.Physics.Arcade.Group; // Group for XP orbs
@@ -64,7 +64,11 @@ export class GameScene extends Phaser.Scene {
     private buildings!: Phaser.Physics.Arcade.StaticGroup;
 
     private enemyDebugDisplay!: EnemyDebugDisplay; // ADDED: Instance of EnemyDebugDisplay
+    private playerDebugDisplay!: PlayerDebugDisplay; // ADDED: Instance of PlayerDebugDisplay
     private killCount = 0; // ADDED: Player's kill count
+    
+    // Pause handling
+    private isPaused: boolean = false;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -94,6 +98,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     create(data: GameSceneData) {
+        this.killCount = 0; // Explicitly reset kill count on scene creation
+
         // Initialize modular components
         this.cameraManager = new CameraManager(this);
         this.inputController = new InputController(this);
@@ -204,12 +210,9 @@ export class GameScene extends Phaser.Scene {
             this
         );
 
-        if (this.input.keyboard) {
-            this.cursors = this.input.keyboard.createCursorKeys();
-        }
-
-        // ADDED: Initialize EnemyDebugDisplay
+        // ADDED: Initialize EnemyDebugDisplay and PlayerDebugDisplay
         this.enemyDebugDisplay = new EnemyDebugDisplay(this);
+        this.playerDebugDisplay = new PlayerDebugDisplay(this);
 
         // Initialize camera with player as target
         if (this.player) {
@@ -219,23 +222,29 @@ export class GameScene extends Phaser.Scene {
         // Launch the HUD Scene
         this.scene.launch('HudScene');
         this.scene.bringToTop('HudScene');
+        
+        // Load the PauseMenuScene but keep it inactive until needed
+        if (!this.scene.get('PauseMenuScene')) {
+            this.scene.add('PauseMenuScene', PauseMenuScene, false);
+        }
 
-        // Listen for HUD ready event before starting wave system
+        // Listen for HUD ready event before starting wave system and updating HUD
         this.game.events.once(GameEvent.HUD_READY, () => {
             if (this.enemySpawner) {
-                this.enemySpawner.startWaveSystem(1); // Start with wave 1 NOW
+                this.enemySpawner.startWaveSystem(1); // Start with wave 1
+            }
+            
+            // Set initial HUD values after HUD is ready
+            if (this.player) {
+                this.game.events.emit(GameEvent.UPDATE_HUD, {
+                    hp: this.player.currentStats.hp,
+                    maxHp: this.player.currentStats.maxHp,
+                    currentXp: 0,
+                    nextLevelXp: 100,
+                    killCount: this.killCount
+                });
             }
         });
-
-        // Set initial HUD values
-        if (this.player) {
-            this.game.events.emit(GameEvent.UPDATE_HUD, {
-                hp: this.player.currentStats.hp,
-                maxHp: this.player.currentStats.maxHp,
-                currentXp: 0,
-                nextLevelXp: 100
-            });
-        }
 
         // Connect progression system events to HUD
         this.events.on(GameEvent.XP_UPDATED, (data: { currentXP: number, currentLevel: number, xpToNextLevel: number }) => {
@@ -335,6 +344,10 @@ export class GameScene extends Phaser.Scene {
             // Optionally, tell HUD all waves are cleared
             this.game.events.emit(GameEvent.ALL_WAVES_CLEARED_HUD);
         });
+        
+        // Set up pause-related event listeners
+        this.game.events.on(GameEvent.RESUME_GAME, this.resumeGame, this);
+        this.game.events.on(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
     }
 
     private handleEntityShoot(payload: {
@@ -390,9 +403,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     update(time: number, delta: number) {
-        if (!this.player || !this.cursors || !this.player.body) {
+        if (!this.player || !this.inputController.cursors || !this.player.body) {
             return;
         }
+        
+        // Check for pause key press using InputController
+        if (this.inputController.isPauseTogglePressed()) {
+            this.togglePause();
+            return;
+        }
+        
+        // Skip updates if game is paused
+        if (this.isPaused) return;
 
         // Update camera manager
         this.cameraManager.update();
@@ -400,10 +422,13 @@ export class GameScene extends Phaser.Scene {
         // Check for enemy debug toggle from input controller
         if (this.inputController.isDebugTogglePressed()) {
             this.enemyDebugDisplay.toggleVisibility();
+            if (this.player) {
+                this.playerDebugDisplay.toggleVisibility();
+            }
         }
 
         // Update player movement - just handles input and movement
-        this.player.updateMovement(this.cursors);
+        this.player.updateMovement(this.inputController.cursors);
 
         // Give the player the current list of enemies for auto-targeting
         if (this.enemies) {
@@ -415,9 +440,10 @@ export class GameScene extends Phaser.Scene {
             this.enemySpawner.update(time, delta);
         }
 
-        // ADDED: Update enemy debug display
-        if (this.enemies) {
-            this.enemyDebugDisplay.update(this.enemies);
+        // MODIFIED: Update debug displays
+        this.enemyDebugDisplay.update(this.enemies);
+        if (this.player) {
+            this.playerDebugDisplay.update([this.player]);
         }
 
         // Y-sorting for player
@@ -438,6 +464,82 @@ export class GameScene extends Phaser.Scene {
             remotePlayer.setDepth(remotePlayer.y + remotePlayer.displayHeight / 2);
         }
     }
+    
+    /**
+     * Toggle game pause state
+     */
+    private togglePause(): void {
+        if (this.isPaused) {
+            this.resumeGame();
+        } else {
+            this.pauseGame();
+        }
+    }
+    
+    /**
+     * Pause the game and show pause menu
+     */
+    private pauseGame(): void {
+        if (this.isPaused) return;
+        
+        this.isPaused = true;
+        
+        // Pause physics if initialized
+        if (this.physics) {
+            this.physics.pause();
+        }
+        
+        // Pause any tweens if initialized
+        if (this.tweens) {
+            this.tweens.pauseAll();
+        }
+        
+        // Launch the pause menu scene
+        this.scene.launch('PauseMenuScene');
+        this.scene.bringToTop('PauseMenuScene');
+        
+        // Emit pause event for any systems that need to know
+        this.game.events.emit(GameEvent.PAUSE_GAME);
+    }
+    
+    /**
+     * Resume the game from pause state
+     */
+    private resumeGame(): void {
+        if (!this.isPaused) return;
+        
+        this.isPaused = false;
+        
+        // Resume physics if initialized
+        if (this.physics) {
+            this.physics.resume();
+        }
+        
+        // Resume any tweens if initialized
+        if (this.tweens) {
+            this.tweens.resumeAll();
+        }
+        
+        // Stop the pause menu scene instead of sleeping it
+        if (this.scene.isActive('PauseMenuScene')) {
+            this.scene.stop('PauseMenuScene');
+        }
+        
+        // Emit resume event for any systems that need to know
+        this.game.events.emit(GameEvent.RESUME_GAME);
+    }
+    
+    /**
+     * Quit the current game and return to main menu
+     */
+    private quitToMenu(): void {
+        // Clean up current game state
+        this.scene.stop('PauseMenuScene');
+        this.scene.stop('HudScene');
+        
+        // Return to main menu scene
+        this.scene.start('MainMenuScene');
+    }
 
     // Add shutdown method for cleanup
     shutdown() {
@@ -454,10 +556,9 @@ export class GameScene extends Phaser.Scene {
             this.particleSystem.destroy();
         }
 
-        // ADDED: Destroy enemy debug display
-        if (this.enemyDebugDisplay) {
-            this.enemyDebugDisplay.destroy();
-        }
+        // ADDED: Destroy enemy debug display and player debug display
+        this.enemyDebugDisplay.destroy();
+        this.playerDebugDisplay.destroy();
 
         // Clean up network connections
         if (this.networkSystem) {
@@ -483,11 +584,21 @@ export class GameScene extends Phaser.Scene {
         this.events.off(GameEvent.ALL_WAVES_CLEARED);
         this.events.off(GameEvent.XP_UPDATED);
         this.events.off(GameEvent.PLAYER_LEVEL_UP);
+        
+        // Remove pause-related event listeners
+        this.game.events.off(GameEvent.RESUME_GAME, this.resumeGame, this);
+        this.game.events.off(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
+        
         // ... remove other listeners added with this.events.on ...
 
         // If HUD scene is managed here, ensure it's stopped
         if (this.scene.isActive('HudScene')) {
             this.scene.stop('HudScene');
+        }
+        
+        // Make sure pause menu is stopped
+        if (this.scene.isActive('PauseMenuScene')) {
+            this.scene.stop('PauseMenuScene');
         }
     }
 

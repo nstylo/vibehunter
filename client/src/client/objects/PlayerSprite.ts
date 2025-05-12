@@ -635,17 +635,12 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
         this.recalculateStats(); // Recalculate currentStats based on new baseStats
 
-        // NO LONGER healing player to max when maxHp increases
-        // Instead, we keep the same HP percentage after max HP increase
-        if (this.baseStats.maxHp > previousMaxHp) {
-            // Calculate what percentage of max HP the player had before
-            const healthPercentage = this.currentStats.hp / previousMaxHp;
-            // Apply that same percentage to the new max HP
-            this.currentStats.hp = Math.min(this.currentStats.hp, Math.round(this.currentStats.maxHp * healthPercentage));
-        }
+        // Don't heal when maxHp increases - keep current HP as is
+        // Just ensure it doesn't exceed the new max HP
+        this.currentStats.hp = Math.min(this.currentStats.hp, this.currentStats.maxHp);
         
-        // Ensure health bar reflects the (potentially) new HP value immediately after healing
-        this.updateHealthBar(); 
+        // Ensure health bar reflects the updated HP value
+        this.updateHealthBar();
 
         // Update attack timers with new cooldown modifiers
         this.initializeAttackTimers();

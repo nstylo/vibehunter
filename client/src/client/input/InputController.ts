@@ -3,10 +3,12 @@ import Phaser from 'phaser';
 export class InputController {
     private scene: Phaser.Scene;
     private cursorHideTimer?: Phaser.Time.TimerEvent;
-    private readonly CURSOR_HIDE_DELAY = 200; // Time in ms to hide cursor after no movement
+    private readonly CURSOR_HIDE_DELAY = 300; // Time in ms to hide cursor after no movement
     
-    // Key bindings
     private keyToggleEnemyDebug!: Phaser.Input.Keyboard.Key;
+    private keyTogglePause!: Phaser.Input.Keyboard.Key;
+
+    public cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -18,9 +20,13 @@ export class InputController {
      * Initialize key bindings
      */
     private initKeys(): void {
+     // Initialize cursor keys
         if (this.scene.input.keyboard) {
+            this.cursors = this.scene.input.keyboard.createCursorKeys();
             // Add debug toggle key
             this.keyToggleEnemyDebug = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+            // Add pause toggle key
+            this.keyTogglePause = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
         }
     }
 
@@ -60,6 +66,13 @@ export class InputController {
      */
     public isDebugTogglePressed(): boolean {
         return Phaser.Input.Keyboard.JustDown(this.keyToggleEnemyDebug);
+    }
+
+    /**
+     * Check if the pause toggle key was just pressed
+     */
+    public isPauseTogglePressed(): boolean {
+        return Phaser.Input.Keyboard.JustDown(this.keyTogglePause);
     }
 
     /**

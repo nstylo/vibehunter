@@ -23,7 +23,7 @@ export function handleProjectileHitEnemy(
     if (!projectile.active || !enemy.active || !projectile.ownerId) return;
     if (player && projectile.ownerId === player.entityId) {
         scene.events.emit(GameEvent.PROJECTILE_HIT_ENTITY, { projectile, target: enemy });
-        enemy.takeDamage(projectile.damageAmount, projectile);
+        enemy.takeDamage(projectile.damageAmount, projectile, projectile.isCritical);
         projectile.impact();
     }
 }
@@ -71,7 +71,7 @@ export function handleProjectileHitPlayer(
 
     if (isEnemyProjectile) {
         scene.events.emit(GameEvent.PROJECTILE_HIT_ENTITY, { projectile, target: player_obj });
-        player_obj.takeDamage(projectile.damageAmount, projectile);
+        player_obj.takeDamage(projectile.damageAmount, projectile, projectile.isCritical);
         projectile.impact();
     }
 }

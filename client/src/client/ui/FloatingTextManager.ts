@@ -42,17 +42,23 @@ export class FloatingTextManager {
         scene: Phaser.Scene,
         amount: number,
         x: number,
-        y: number
+        y: number,
+        isCritical = false
     ): void {
         if (amount <= 0) return;
 
+        // Choose color and size based on critical status
+        const color = isCritical ? '#ffa500' : '#ff0000'; // Orange for critical, red for normal
+        const fontSize = isCritical ? '24px' : '20px'; // Larger font for critical hits
+        const textSuffix = isCritical ? '!' : ''; // Add exclamation for critical hits
+
         this.showFloatingText(
             scene,
-            amount.toString(),
+            amount.toString() + textSuffix, // Append suffix
             x,
             y,
-            '#ff0000',
-            '20px'
+            color, // Use determined color
+            fontSize // Use determined font size
         );
     }
 } 

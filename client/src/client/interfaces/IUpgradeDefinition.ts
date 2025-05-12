@@ -11,7 +11,9 @@ export type PlayerStatType =
     | 'effectDurationModifier'
     | 'xpGainModifier'
     | 'pickupRadiusModifier'
-    | 'luck';
+    | 'luck'
+    | 'baseCriticalHitChance'
+    | 'criticalHitDamageMultiplier';
 
 // Defines attack properties that can be modified by attack-specific upgrades
 export type AttackStatType = 

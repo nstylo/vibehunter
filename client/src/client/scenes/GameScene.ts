@@ -60,11 +60,8 @@ export class GameScene extends Phaser.Scene {
     private serverUrl = 'ws://127.0.0.1:8080';
     private remotePlayers: Map<string, PlayerSprite> = new Map();
 
-    public static readonly CELL_WIDTH = 64;
-    public static readonly CELL_HEIGHT = 64;
-
-    private hitboxCollisionManager!: HitboxCollisionManager; // ADDED
-    private buildings!: Phaser.Physics.Arcade.StaticGroup; // ADDED for static building colliders
+    private hitboxCollisionManager!: HitboxCollisionManager;
+    private buildings!: Phaser.Physics.Arcade.StaticGroup;
 
     private enemyDebugDisplay!: EnemyDebugDisplay; // ADDED: Instance of EnemyDebugDisplay
     private killCount = 0; // ADDED: Player's kill count
@@ -349,8 +346,9 @@ export class GameScene extends Phaser.Scene {
         projectileSpeed: number,
         lifespan: number,
         projectileScale?: number,
+        isCritical: boolean;
     }): void {
-        const { shooter, projectileType, direction, damage, projectileSpeed, lifespan } = payload;
+        const { shooter, projectileType, direction, damage, projectileSpeed, lifespan, isCritical } = payload;
 
         let spawnOffsetMagnitude: number;
         const projectileScale: number | undefined = payload.projectileScale;
@@ -379,7 +377,8 @@ export class GameScene extends Phaser.Scene {
             projectileSpeed,
             lifespan,
             projectileScale,
-            this.particleSystem
+            this.particleSystem,
+            isCritical
         );
 
         this.projectiles.add(projectile);
@@ -570,7 +569,7 @@ export class GameScene extends Phaser.Scene {
             this.remotePlayers.set(id, remotePlayer);
 
             // Add any necessary colliders
-            if (this.buildings) { // ADDED collision with static buildings for remote players
+            if (this.buildings) { // Collision with static buildings for remote players
                 this.physics.add.collider(remotePlayer, this.buildings);
             }
         }

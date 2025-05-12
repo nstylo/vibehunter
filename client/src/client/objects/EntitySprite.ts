@@ -106,7 +106,7 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     }
 
     // Common methods can be added here, e.g.:
-    public takeDamage(amount: number, source?: EntitySprite | ProjectileSprite | string): void {
+    public takeDamage(amount: number, source?: EntitySprite | ProjectileSprite | string, isCritical = false): void {
         if (amount <= 0) return; // No damage to take
 
         // Calculate damage after defense, ensuring at least 1 damage if original amount > 0
@@ -120,12 +120,13 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
         // Show health bar when damage is taken
         this.showHealthBar();
 
-        // Display floating damage number
+        // Display floating damage number - USE THE ORIGINAL 'amount' FOR DISPLAY
         FloatingTextManager.showDamageNumber(
             this.scene,
-            actualDamageTaken,
+            amount, // Display the original potential damage
             this.x,
-            this.y - this.height / 2
+            this.y - this.height / 2,
+            isCritical
         );
 
         this.scene.events.emit(GameEvent.ENTITY_TAKE_DAMAGE, {

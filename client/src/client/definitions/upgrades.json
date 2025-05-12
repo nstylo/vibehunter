@@ -35,6 +35,69 @@
         { "stat": "xpGainModifier", "modifier": "PERCENTAGE", "value": 0.10 }
       ],
       "maxLevel": 3
+    },
+    {
+      "id": "DMG_1_COMBAT_TRAINING",
+      "name": "Combat Training",
+      "description": "Increases all damage by 8%.",
+      "effects": [
+        { "stat": "damageModifier", "modifier": "PERCENTAGE", "value": 0.08 }
+      ],
+      "maxLevel": 5
+    },
+    {
+      "id": "PROJ_SPEED_1_AERODYNAMICS",
+      "name": "Aerodynamic Projectiles",
+      "description": "Increases projectile speed by 15%.",
+      "effects": [
+        { "stat": "projectileSpeedModifier", "modifier": "PERCENTAGE", "value": 0.15 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "PICKUP_1_MAGNETIC_CHARM",
+      "name": "Magnetic Charm",
+      "description": "Increases pickup radius by 20%.",
+      "effects": [
+        { "stat": "pickupRadiusModifier", "modifier": "PERCENTAGE", "value": 0.20 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "LUCK_1_LUCKY_COIN",
+      "name": "Lucky Coin",
+      "description": "Increases luck by 10%. Better drops, more crits!",
+      "effects": [
+        { "stat": "luck", "modifier": "PERCENTAGE", "value": 0.10 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "AOE_1_EXPLOSIVE_FORCE",
+      "name": "Explosive Force",
+      "description": "Increases area of effect for abilities by 12%.",
+      "effects": [
+        { "stat": "areaOfEffectModifier", "modifier": "PERCENTAGE", "value": 0.12 }
+      ],
+      "maxLevel": 3
+    },
+    {
+      "id": "CRIT_CHANCE_1_SHARP_EYES",
+      "name": "Sharp Eyes",
+      "description": "Increases base critical hit chance by 2%.",
+      "effects": [
+        { "stat": "baseCriticalHitChance", "modifier": "FLAT_ADD", "value": 0.02 }
+      ],
+      "maxLevel": 5
+    },
+    {
+      "id": "CRIT_DMG_1_EXPLOIT_WEAKNESS",
+      "name": "Exploit Weakness",
+      "description": "Increases critical hit damage multiplier by 0.25x.",
+      "effects": [
+        { "stat": "criticalHitDamageMultiplier", "modifier": "FLAT_ADD", "value": 0.25 }
+      ],
+      "maxLevel": 4
     }
   ],
   "attack_upgrades": [

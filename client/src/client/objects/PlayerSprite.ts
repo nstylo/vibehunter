@@ -128,7 +128,9 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             effectDurationModifier: DEFAULT_PLAYER_BASE_STATS.effectDurationModifier,
             xpGainModifier: DEFAULT_PLAYER_BASE_STATS.xpGainModifier,
             pickupRadiusModifier: DEFAULT_PLAYER_BASE_STATS.pickupRadiusModifier,
-            luck: DEFAULT_PLAYER_BASE_STATS.luck
+            luck: DEFAULT_PLAYER_BASE_STATS.luck,
+            baseCriticalHitChance: DEFAULT_PLAYER_BASE_STATS.baseCriticalHitChance,
+            criticalHitDamageMultiplier: DEFAULT_PLAYER_BASE_STATS.criticalHitDamageMultiplier
         };
         this.currentStats = { ...this.baseStats };
 
@@ -331,9 +333,11 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             }
         }
 
-        // Calculate effective damage
+        // Calculate effective damage and check for critical hit
         const baseDamage = attack.definition.damage || 0;
-        const effectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        const baseEffectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        const isCritical = Math.random() < this.getEffectiveCriticalHitChance();
+        const finalDamage = isCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
         
         // Handle multi-projectile attacks
         const projectilesPerShot = attack.definition.projectilesPerShot || 1;
@@ -341,33 +345,33 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         
         let direction: Phaser.Math.Vector2;
 
-        if (projectilesPerShot > 1 && spreadAngle > 0) {
-            // Fire multiple projectiles in a spread
-            const angleToTarget = Phaser.Math.Angle.Between(this.x, this.y, finalTargetPos.x, finalTargetPos.y);
-            const startAngle = angleToTarget - (spreadAngle * Math.PI / 180) / 2;
-            const angleStep = (spreadAngle * Math.PI / 180) / (projectilesPerShot - 1 || 1); // Avoid division by zero if projectilesPerShot is 1
-            
-            for (let i = 0; i < projectilesPerShot; i++) {
-                const currentAngle = startAngle + angleStep * i;
-                const shotDirection = new Phaser.Math.Vector2(
-                    Math.cos(currentAngle), 
-                    Math.sin(currentAngle)
-                ).normalize();
-                this.fireProjectile(attack, effectiveDamage, shotDirection);
-            }
-        } else {
-            // Fire a single projectile
+        if (projectilesPerShot === 1) {
+            // Single projectile
             direction = new Phaser.Math.Vector2(finalTargetPos.x - this.x, finalTargetPos.y - this.y).normalize();
-            this.fireProjectile(attack, effectiveDamage, direction);
+            this.fireProjectile(attack, finalDamage, direction, isCritical); // Pass isCritical
+        } else {
+            // Multiple projectiles with spread
+            const baseDirection = new Phaser.Math.Vector2(finalTargetPos.x - this.x, finalTargetPos.y - this.y).normalize();
+            const angleStep = spreadAngle / (projectilesPerShot - 1);
+            const startAngle = baseDirection.angle() - spreadAngle / 2;
+
+            for (let i = 0; i < projectilesPerShot; i++) {
+                const currentAngle = startAngle + i * angleStep;
+                direction = new Phaser.Math.Vector2(Math.cos(currentAngle), Math.sin(currentAngle));
+                // Recalculate crit status for each projectile independently
+                const isMultiCritical = Math.random() < this.getEffectiveCriticalHitChance();
+                const finalMultiDamage = isMultiCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
+                this.fireProjectile(attack, finalMultiDamage, direction, isMultiCritical); // Pass isCritical
+            }
         }
-        
+
         this.faceTarget(finalTargetPos.x);
     }
 
     /**
      * Fire a projectile for a ranged attack
      */
-    private fireProjectile(attack: IAttackInstance, damage: number, direction: Phaser.Math.Vector2): void {
+    private fireProjectile(attack: IAttackInstance, damage: number, direction: Phaser.Math.Vector2, isCritical: boolean): void {
         // Get projectile type from attack definition
         const projectileType = attack.definition.projectileType || 'BULLET';
         
@@ -395,7 +399,8 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             x: this.x + direction.x * (this.width / 2 + 10),
             y: this.y + direction.y * (this.height / 2),
             attackDef: attack.definition, // Pass the full attack definition for additional properties
-            statusEffectOnHit: attack.definition.statusEffectOnHit
+            statusEffectOnHit: attack.definition.statusEffectOnHit,
+            isCritical: isCritical
         });
     }
 
@@ -431,15 +436,18 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             this.faceTarget(closestEnemy.x);
         }
         
-        // Calculate effective damage
+        // Calculate effective damage and check for critical hit
         const baseDamage = attack.definition.damage || 0;
-        const effectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        const baseEffectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        // We calculate crit once for the entire melee swing/AoE
+        const isCritical = Math.random() < this.getEffectiveCriticalHitChance(); 
+        const finalDamage = isCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
         
         // Apply damage to all enemies in range
         for (const enemy of enemiesInRange) {
             if (!enemy || !enemy.active) continue;
 
-            enemy.takeDamage(effectiveDamage, this);
+            enemy.takeDamage(finalDamage, this, isCritical); // Pass isCritical to takeDamage
 
             // Apply knockback if specified
             if (attack.definition.knockbackForce) {
@@ -522,7 +530,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         const baseDamage = attack.definition.damage || 0;
         const effectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
         
-        this.fireProjectile(attack, effectiveDamage, direction);
+        this.fireProjectile(attack, effectiveDamage, direction, false);
     }
 
     /**
@@ -563,7 +571,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         
         // Apply damage to all enemies in range
         for (const enemy of enemiesInRange) {
-            enemy.takeDamage(effectiveDamage, this);
+            enemy.takeDamage(effectiveDamage, this, false);
             
             // Apply status effect if specified
             if (attack.definition.statusEffectOnHit) {
@@ -622,12 +630,18 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         this.baseStats.xpGainModifier = newStats.xpGainModifier;
         this.baseStats.pickupRadiusModifier = newStats.pickupRadiusModifier;
         this.baseStats.luck = newStats.luck;
+        this.baseStats.baseCriticalHitChance = newStats.baseCriticalHitChance;
+        this.baseStats.criticalHitDamageMultiplier = newStats.criticalHitDamageMultiplier;
 
         this.recalculateStats(); // Recalculate currentStats based on new baseStats
 
-        // If maxHp increased, heal the player to the new maxHp
+        // NO LONGER healing player to max when maxHp increases
+        // Instead, we keep the same HP percentage after max HP increase
         if (this.baseStats.maxHp > previousMaxHp) {
-            this.currentStats.hp = this.currentStats.maxHp;
+            // Calculate what percentage of max HP the player had before
+            const healthPercentage = this.currentStats.hp / previousMaxHp;
+            // Apply that same percentage to the new max HP
+            this.currentStats.hp = Math.min(this.currentStats.hp, Math.round(this.currentStats.maxHp * healthPercentage));
         }
         
         // Ensure health bar reflects the (potentially) new HP value immediately after healing
@@ -1028,5 +1042,17 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             this.scene.events.off(GameEvent.PLAYER_STATS_UPDATED, this.updateStats, this); // Clean up listener
         }
         super.destroy(fromScene);
+    }
+
+    /**
+     * Calculates the effective critical hit chance based on base chance and luck.
+     * @returns The calculated critical hit chance (e.g., 0.1 for 10%).
+     */
+    public getEffectiveCriticalHitChance(): number {
+        const LUCK_TO_CRIT_CHANCE_CONVERSION = 0.001; // 1 point of luck adds 0.1% crit chance
+        const baseCrit = this.currentStats.baseCriticalHitChance ?? 0;
+        const luckBonus = (this.currentStats.luck ?? 0) * LUCK_TO_CRIT_CHANCE_CONVERSION;
+        // Clamp the result between 0 and 1 (0% and 100%)
+        return Math.max(0, Math.min(1, baseCrit + luckBonus)); 
     }
 } 

@@ -53,6 +53,7 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
   public lifeMs: number;
   public damageAmount: number;
   public speed: number; // Speed of the projectile
+  public isCritical: boolean; // Added: Tracks if the hit is critical
 
   private projectileDef: ProjectileDefinition | undefined;
   private particleSystem?: ParticleSystem;
@@ -68,7 +69,8 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     speed: number,
     lifeMs: number,
     scaleFactor?: number, // Renamed from scale to scaleFactor for clarity
-    particleSystem?: ParticleSystem
+    particleSystem?: ParticleSystem,
+    isCritical = false // Added isCritical parameter
   ) {
     const typeStr = ProjectileType[projectileType];
     const definition = PROJECTILE_DEFINITIONS.find(def => def.type === typeStr) as ProjectileDefinition | undefined;
@@ -94,6 +96,7 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     this.lifeMs = lifeMs;
     this.particleSystem = particleSystem;
     this.projectileTypeEnum = projectileType;
+    this.isCritical = isCritical; // Store the critical status
 
     scene.add.existing(this);
     scene.physics.add.existing(this);

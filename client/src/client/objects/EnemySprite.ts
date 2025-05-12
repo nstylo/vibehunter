@@ -18,6 +18,7 @@ import { ChaseTargetBehavior } from '../behaviors/ChaseTargetBehavior';
 import { AttackingMeleeBehavior } from '../behaviors/AttackingMeleeBehavior';
 import { AttackingRangedBehavior } from '../behaviors/AttackingRangedBehavior';
 import { FleeBehavior } from '../behaviors/FleeBehavior'; // Added import
+import { EVENT_ENTITY_SHOOT_PROJECTILE } from '../../common/events';
 
 const ENEMY_SPRITE_KEYS: string[] = [];
 for (let i = 1; i <= 36; i++) {
@@ -721,32 +722,20 @@ export class EnemySprite extends EntitySprite {
         const range = attack.definition.range || 200;
         const lifespan = (range / effectiveSpeed) * 1000; // Convert to milliseconds
         
-        const eventData = {
-            shooterId: this.entityId,
+        // Emit event to spawn projectile
+        this.scene.events.emit(EVENT_ENTITY_SHOOT_PROJECTILE, {
+            shooter: this,
             projectileType: projectileType,
             damage: damage,
             knockbackForce: attack.definition.knockbackForce || 0,
             projectileSpeed: effectiveSpeed,
-            projectileScale: 1.0, // Enemy projectiles always scale 1.0 for now
+            projectileScale: 1.0,
             lifespan: lifespan,
-            direction: { x: direction.x, y: direction.y },
+            direction: direction,
             x: this.x + direction.x * (this.width / 2 + 10),
             y: this.y + direction.y * (this.height / 2),
-            attackDefId: attack.definition.id,
-            statusEffectOnHit: attack.definition.statusEffectOnHit ? { ...attack.definition.statusEffectOnHit } : undefined
-        };
-
-        try {
-            console.log('EnemySprite firing projectile: ' + JSON.stringify(eventData));
-        } catch (e) {
-            console.error('Error stringifying enemy projectile eventData:', e);
-            console.log('EnemySprite firing projectile (fallback): Type=' + projectileType + ', Damage=' + damage + ', Speed=' + effectiveSpeed + ', Shooter=' + this.entityId + ', X=' + eventData.x + ', Y=' + eventData.y);
-        }
-        
-        // Emit event to spawn projectile
-        this.scene.events.emit('EVENT_ENTITY_SHOOT_PROJECTILE', {
-            ...eventData,
-            shooter: this
+            attackDef: attack.definition, // Pass the full attack definition for additional properties
+            statusEffectOnHit: attack.definition.statusEffectOnHit
         });
     }
 } 

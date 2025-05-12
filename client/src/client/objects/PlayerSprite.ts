@@ -368,7 +368,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
      */
     private fireProjectile(attack: IAttackInstance, damage: number, direction: Phaser.Math.Vector2): void {
         // Get projectile type from attack definition
-        const projectileType = attack.definition.projectileType || 'BULLET'; // Default to BULLET if undefined
+        const projectileType = attack.definition.projectileType || 'BULLET';
         
         // Calculate effective projectile speed
         const baseProjectileSpeed = 300; // Default if not specified
@@ -381,31 +381,20 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         const range = attack.definition.range || 200;
         const lifespan = (range / effectiveSpeed) * 1000; // Convert to milliseconds
         
-        const eventData = {
-            shooterId: this.entityId,
+        // Emit event to spawn projectile
+        this.scene.events.emit('EVENT_ENTITY_SHOOT_PROJECTILE', {
+            shooter: this,
             projectileType: projectileType,
             damage: damage,
             knockbackForce: attack.definition.knockbackForce || 0,
             projectileSpeed: effectiveSpeed,
             projectileScale: effectiveSize,
             lifespan: lifespan,
-            direction: { x: direction.x, y: direction.y },
+            direction: direction,
             x: this.x + direction.x * (this.width / 2 + 10),
             y: this.y + direction.y * (this.height / 2),
-            attackDefId: attack.definition.id,
-            statusEffectOnHit: attack.definition.statusEffectOnHit ? { ...attack.definition.statusEffectOnHit } : undefined
-        };
-
-        try {
-            console.log('PlayerSprite firing projectile: ' + JSON.stringify(eventData));
-        } catch (e) {
-            console.error('Error stringifying player projectile eventData:', e);
-            console.log('PlayerSprite firing projectile (fallback): Type=' + projectileType + ', Damage=' + damage + ', Speed=' + effectiveSpeed + ', Shooter=' + this.entityId + ', X=' + eventData.x + ', Y=' + eventData.y);
-        }
-        
-        this.scene.events.emit('EVENT_ENTITY_SHOOT_PROJECTILE', {
-            ...eventData,
-            shooter: this 
+            attackDef: attack.definition, // Pass the full attack definition for additional properties
+            statusEffectOnHit: attack.definition.statusEffectOnHit
         });
     }
 

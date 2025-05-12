@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { ParticleSystem } from '../systems/ParticleSystem';
 import PROJECTILE_DEFINITIONS from '../definitions/projectiles.json'; // Import projectile definitions
+import { DataManager } from '../systems/DataManager'; // ADDED: Import DataManager
 
 export enum ProjectileType {
   BULLET = 'BULLET',
@@ -18,7 +19,19 @@ export enum ProjectileType {
   HOSE_SPRAY = 'HOSE_SPRAY',
   TRANQUILIZER_DART = 'TRANQUILIZER_DART',
   SNARE = 'SNARE',
-  BOTTLE = 'BOTTLE'
+  BOTTLE = 'BOTTLE',
+  // ADDED: Ensure all types from projectiles.json are here
+  PAPER_PROJECTILE = 'PAPER_PROJECTILE',
+  GHOST_COIN = 'GHOST_COIN',
+  SOUND_WAVE = 'SOUND_WAVE',
+  MUD_PATCH = 'MUD_PATCH',
+  CAN_SHARD = 'CAN_SHARD',
+  TRASH_BALL = 'TRASH_BALL',
+  DIGITAL_GLYPH = 'DIGITAL_GLYPH',
+  CRYPTO_COIN = 'CRYPTO_COIN',
+  ENERGY_BLAST = 'ENERGY_BLAST',
+  PAPER_SHURIKEN = 'PAPER_SHURIKEN',
+  AIR_GUST = 'AIR_GUST'
 }
 
 interface ProjectileDefinition {

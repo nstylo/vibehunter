@@ -45,7 +45,10 @@ export class AttackingMeleeBehavior extends BaseBehavior implements IBehavior {
     }
 
     if (distanceToTarget <= enemy.meleeAttackRange) {
-      enemy.performMeleeAttack(); // performMeleeAttack is public and handles its own cooldown
+      enemy.attemptAttack('MELEE'); // performMeleeAttack is public and handles its own cooldown
+      if (enemy.body instanceof Phaser.Physics.Arcade.Body) {
+        enemy.body.setVelocity(0, 0);
+      }
       // Stay in ATTACKING_MELEE state to allow continuous attacks if target remains in range.
       // The attack method itself has a cooldown.
       return null; 

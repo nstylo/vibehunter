@@ -5,8 +5,6 @@ import { BaseBehavior } from './BaseBehavior';
 
 export class ChaseTargetBehavior extends BaseBehavior {
     public readonly id = BehaviorState.CHASING;
-    // Remove hardcoded lose sight distance, will use enemy's sightRange
-    // private loseSightDistance = 450; // Distance at which the enemy might lose sight and return to IDLE or PATROLLING
 
     enter(enemy: EnemySprite, target?: PlayerSprite): void {
         // console.log(`${enemy.enemyType} entering CHASING state towards ${target?.entityId}`);
@@ -45,15 +43,20 @@ export class ChaseTargetBehavior extends BaseBehavior {
 
         // If player is too far, lose sight and go back to idle/patrol
         // Use the enemy's sightRange for losing sight of the player
-        if (distanceToPlayer > enemy.sightRange * 1.1) {
+        if (distanceToPlayer > enemy.sightRange * 1.2) {
             // console.log(`${enemy.enemyType} lost sight of target.`);
             return BehaviorState.IDLE; // Or PATROLLING
         }
 
+        // Face the target
+        if (target.x < enemy.x) {
+            enemy.setFlipX(true);
+        } else {
+            enemy.setFlipX(false);
+        }
+
         // Determine if in attack range (melee or ranged) - transition to ATTACKING states
         if (enemy.isRanged && enemy.rangedAttackRange && distanceToPlayer <= enemy.rangedAttackRange) {
-            // TODO: Implement more sophisticated ranged positioning (e.g. maintain distance)
-            // For now, basic transition if in range.
             return BehaviorState.ATTACKING_RANGED;
         }
         if (!enemy.isRanged && distanceToPlayer <= enemy.meleeAttackRange) {
@@ -66,13 +69,6 @@ export class ChaseTargetBehavior extends BaseBehavior {
             const speed = enemy.currentStats.maxSpeed; // Use current speed after status effects
             enemy.body.setVelocityX(Math.cos(angleToPlayer) * speed);
             enemy.body.setVelocityY(Math.sin(angleToPlayer) * speed);
-        }
-
-        // Flip sprite based on player position
-        if (target.x < enemy.x) {
-            enemy.setFlipX(true);
-        } else {
-            enemy.setFlipX(false);
         }
 
         return null; // Stay in CHASING state

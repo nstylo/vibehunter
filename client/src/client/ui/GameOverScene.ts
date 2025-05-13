@@ -5,7 +5,7 @@ export default class GameOverScene extends Phaser.Scene {
         super({ key: 'GameOverScene' });
     }
 
-    create(data: { wavesSurvived?: number }) {
+    create(data: { wavesSurvived?: number, killCount?: number }) {
         // Stop UpgradeUIScene if it's active
         if (this.scene.isActive('UpgradeUIScene')) {
             this.scene.stop('UpgradeUIScene');
@@ -40,16 +40,26 @@ export default class GameOverScene extends Phaser.Scene {
         const wavesText = data.wavesSurvived !== undefined ? `Waves Survived: ${data.wavesSurvived}` : 'Waves Survived: N/A';
         this.add.text(
             this.cameras.main.centerX,
-            this.cameras.main.centerY,
+            this.cameras.main.centerY - 30,
             wavesText,
             { fontSize: '24px', color: '#ffffff' }
         ).setOrigin(0.5);
+
+        // Add kill count if available
+        if (data.killCount !== undefined) {
+            this.add.text(
+                this.cameras.main.centerX,
+                this.cameras.main.centerY + 10,
+                `Enemies Defeated: ${data.killCount}`,
+                { fontSize: '24px', color: '#ffffff' }
+            ).setOrigin(0.5);
+        }
 
         // Restart button (text-based for now)
         const restartButton = this.add.text(
             this.cameras.main.centerX,
             this.cameras.main.centerY + 100,
-            'Back to Lobby',
+            'Play Again',
             { fontSize: '32px', color: '#00ff00', backgroundColor: '#333333', padding: { x: 20, y: 10 } }
         ).setOrigin(0.5).setInteractive();
 
@@ -57,11 +67,17 @@ export default class GameOverScene extends Phaser.Scene {
         const originalButtonScale = restartButton.scale;
 
         restartButton.on('pointerdown', () => {
-            // Assuming GameScene and HudScene were running
+            // Stop all scenes
             this.scene.stop('GameScene');
             this.scene.stop('HudScene');
             this.scene.stop('UpgradeUIScene');
-            this.scene.start('LobbyScene');
+            
+            // Restart GameScene with default parameters
+            this.scene.start('GameScene', {
+                playerId: 'player_' + Math.floor(Math.random() * 1000),
+                initialPosition: { x: 5000, y: 5000 }, // Center of map (assuming 10000x10000 map)
+                characterId: '1' // Default character
+            });
         });
 
         restartButton.on('pointerover', () => {

@@ -6,10 +6,12 @@ export class ParticleSystem {
     private projectileImpactEmitters: Map<string, Phaser.GameObjects.Particles.ParticleEmitter | Record<string, Phaser.GameObjects.Particles.ParticleEmitter>>;
     private enemyDeathEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
     private footstepEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+    private effectEmitters: Map<string, Phaser.GameObjects.Particles.ParticleEmitter>;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
         this.projectileImpactEmitters = new Map();
+        this.effectEmitters = new Map();
         this.initialize();
     }
 
@@ -18,6 +20,7 @@ export class ParticleSystem {
         this.initProjectileImpactEmitters();
         this.initEnemyDeathEmitter();
         this.initFootstepEmitter();
+        this.initEffectEmitters();
     }
 
     private createParticleTextures(): void {
@@ -219,6 +222,170 @@ export class ParticleSystem {
         });
     }
 
+    private initEffectEmitters(): void {
+        // Create a generic particle effect emitter for hits
+        const hitEmitter = this.scene.add.particles(0, 0, 'particle_core', {
+            speed: { min: 100, max: 250 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.6, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: { min: 300, max: 600 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: 0xffffff,
+            quantity: { min: 12, max: 20 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('hit', hitEmitter);
+
+        // Create glass shard effect for bottle hits
+        const glassShardEmitter = this.scene.add.particles(0, 0, 'spark_dynamic', {
+            speed: { min: 120, max: 280 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.5, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: { min: 400, max: 800 },
+            blendMode: Phaser.BlendModes.NORMAL,
+            tint: 0x88ccff, // Light blue for glass
+            quantity: { min: 15, max: 25 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('glassShard', glassShardEmitter);
+
+        // Create a healing effect
+        const healEmitter = this.scene.add.particles(0, 0, 'particle_core', {
+            speed: { min: 20, max: 80 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.4, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: { min: 800, max: 1200 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: 0x00ff44, // Healing green
+            quantity: { min: 10, max: 15 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('healSparkle', healEmitter);
+
+        // Create a ground crack effect
+        const groundCrackEmitter = this.scene.add.particles(0, 0, 'spark_dynamic', {
+            speed: { min: 40, max: 100 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.7, end: 0.3 },
+            alpha: { start: 0.9, end: 0 },
+            lifespan: { min: 600, max: 1000 },
+            tint: 0xcccccc, // Gray for debris
+            quantity: { min: 15, max: 20 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('groundCrack', groundCrackEmitter);
+
+        // Create a static discharge effect
+        const staticEmitter = this.scene.add.particles(0, 0, 'spark_dynamic', {
+            speed: { min: 150, max: 300 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.6, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: { min: 300, max: 700 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: 0xffff77, // Yellow for electricity
+            quantity: { min: 20, max: 30 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('staticDischarge', staticEmitter);
+
+        // Create a sound wave impact effect
+        const soundwaveEmitter = this.scene.add.particles(0, 0, 'smoke_soft', {
+            speed: { min: 30, max: 80 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.5, end: 2.0 },
+            alpha: { start: 0.6, end: 0 },
+            lifespan: { min: 500, max: 800 },
+            tint: 0xaaaaff, // Light blue for sound waves
+            quantity: { min: 12, max: 15 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('soundwaveImpact', soundwaveEmitter);
+
+        // Create continuous flame effect
+        const flameEmitter = this.scene.add.particles(0, 0, 'flame_particle', {
+            speed: { min: 30, max: 80 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.8, end: 0.2 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: { min: 300, max: 600 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: [0xff6600, 0xffaa00], // Orange/yellow for flames
+            quantity: { min: 5, max: 10 },
+            frequency: -1,
+            emitting: false,
+            gravityY: -40
+        });
+        this.effectEmitters.set('flameContinuous', flameEmitter);
+
+        // Create calming ripple effect
+        const calmingRippleEmitter = this.scene.add.particles(0, 0, 'smoke_soft', {
+            speed: { min: 20, max: 50 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.2, end: 1.5, ease: 'Linear' },
+            alpha: { start: 0.7, end: 0 },
+            lifespan: { min: 800, max: 1200 },
+            tint: 0x77ddff, // Light blue for calming effect
+            quantity: { min: 3, max: 5 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('calmingRipple', calmingRippleEmitter);
+
+        // Camera flash effect (bright white particles)
+        const cameraFlashEmitter = this.scene.add.particles(0, 0, 'particle_core', {
+            speed: { min: 10, max: 50 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 0.9, end: 0 },
+            lifespan: { min: 300, max: 500 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: 0xffffff, // Bright white
+            quantity: { min: 20, max: 30 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('cameraFlash', cameraFlashEmitter);
+
+        // Energy blast impact
+        const energyBlastEmitter = this.scene.add.particles(0, 0, 'spark_dynamic', {
+            speed: { min: 100, max: 300 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.7, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: { min: 400, max: 700 },
+            blendMode: Phaser.BlendModes.ADD,
+            tint: [0x33aaff, 0x00ffff], // Blue/cyan for energy
+            quantity: { min: 20, max: 30 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('energyBlastImpact', energyBlastEmitter);
+
+        // Wind puff effect
+        const windPuffEmitter = this.scene.add.particles(0, 0, 'smoke_soft', {
+            speed: { min: 30, max: 80 },
+            angle: { min: 160, max: 200 },
+            scale: { start: 0.3, end: 1.0 },
+            alpha: { start: 0.3, end: 0 },
+            lifespan: { min: 400, max: 800 },
+            tint: 0xffffff, // White for air/wind
+            quantity: { min: 8, max: 12 },
+            frequency: -1,
+            emitting: false
+        });
+        this.effectEmitters.set('windPuff', windPuffEmitter);
+    }
+
     public playProjectileImpact(
         projectileType: ProjectileType,
         x: number,
@@ -339,6 +506,85 @@ export class ParticleSystem {
         });
     }
 
+    /**
+     * Play a particle effect at the given position
+     * @param effectName Name of the effect to play (must match a key in effectEmitters)
+     * @param x X-coordinate to spawn the effect
+     * @param y Y-coordinate to spawn the effect
+     * @param scale Optional scale multiplier for the effect
+     */
+    public playEffect(effectName: string, x: number, y: number, scale: number = 1): void {
+        const emitter = this.effectEmitters.get(effectName);
+        
+        if (!emitter) {
+            // Fallback to a simple particle burst if the specific effect doesn't exist
+            console.warn(`ParticleSystem: Effect '${effectName}' not found, using fallback effect`);
+            this.playFallbackEffect(x, y);
+            return;
+        }
+        
+        // Determine particle count based on the effect type
+        // Instead of using getQuantity which doesn't exist, use reasonable defaults
+        // or extract from the emitter's config
+        let minQuantity = 10;
+        let maxQuantity = 20;
+        
+        // Try to extract from emitter config if available
+        const config = (emitter as any).config?.quantity;
+        if (config) {
+            if (typeof config === 'number') {
+                minQuantity = maxQuantity = config;
+            } else if (typeof config === 'object') {
+                minQuantity = config.min || minQuantity;
+                maxQuantity = config.max || maxQuantity;
+            }
+        }
+        
+        // Generate a random quantity within the range, scaled by the scale parameter
+        const quantity = Math.ceil(Phaser.Math.Between(minQuantity, maxQuantity) * scale);
+        
+        // Apply the scale to the particles themselves if needed
+        emitter.setScale(scale);
+        
+        // Emit the particles
+        emitter.explode(quantity, x, y);
+        
+        // Optionally add a small flash for more impact on certain effects
+        if (['glassShard', 'groundCrack', 'energyBlastImpact', 'staticDischarge', 'cameraFlash'].includes(effectName)) {
+            const flash = this.scene.add.circle(x, y, 20 * scale, 0xffffff, 0.7);
+            this.scene.tweens.add({
+                targets: flash,
+                alpha: 0,
+                scale: 1.5,
+                duration: 150,
+                ease: 'Power2',
+                onComplete: () => flash.destroy()
+            });
+        }
+    }
+    
+    /**
+     * Simple fallback effect when a specific named effect isn't found
+     */
+    private playFallbackEffect(x: number, y: number): void {
+        const hitEmitter = this.effectEmitters.get('hit');
+        if (hitEmitter) {
+            hitEmitter.explode(10, x, y);
+        } else {
+            // If even the 'hit' emitter doesn't exist, create a one-time particle burst
+            this.scene.add.particles(x, y, 'particle_core', {
+                speed: { min: 100, max: 200 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 0.5, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: { min: 300, max: 500 },
+                blendMode: Phaser.BlendModes.ADD,
+                quantity: 10,
+                emitting: false
+            }).explode(10, 0, 0);
+        }
+    }
+
     public destroy(): void {
         for (const emitterOrGroup of this.projectileImpactEmitters.values()) {
             if (emitterOrGroup instanceof Phaser.GameObjects.Particles.ParticleEmitter) {
@@ -357,11 +603,31 @@ export class ParticleSystem {
         }
         this.projectileImpactEmitters.clear();
 
+        // Clean up effect emitters
+        for (const emitter of this.effectEmitters.values()) {
+            emitter.destroy();
+        }
+        this.effectEmitters.clear();
+
         if (this.enemyDeathEmitter) {
             this.enemyDeathEmitter.destroy();
         }
         if (this.footstepEmitter) {
             this.footstepEmitter.destroy();
         }
+    }
+
+    // Method to play a generic enemy attack effect (can be expanded)
+    public playEnemyAttack(x: number, y: number, effectKey?: string): void {
+        if (effectKey) {
+            const emitter = this.effectEmitters.get(effectKey);
+            if (emitter) {
+                emitter.explode(Phaser.Math.Between(5, 10), x, y);
+                return;
+            }
+            console.warn(`ParticleSystem: Enemy attack effect '${effectKey}' not found.`);
+        }
+        // Fallback simple burst if no specific key or key not found
+        this.playFallbackEffect(x, y);
     }
 } 

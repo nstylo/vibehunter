@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
 import { EntitySprite } from './EntitySprite'
 import type { EnemySprite } from './EnemySprite';
-import { type IPlayerStats, DEFAULT_PLAYER_STATS } from '../../common/PlayerStats';
+import { type IPlayerStats, DEFAULT_PLAYER_BASE_STATS } from '../interfaces/IPlayerStats';
 import type NetworkSystem from '../systems/NetworkSystem'
 import type { NetworkAware } from '../types/multiplayer';
 import type { ParticleSystem } from '../systems/ParticleSystem';
+import { DataManager } from '../systems/DataManager';
+import type { IAttackInstance } from '../interfaces/IAttackInstance';
+import type { IAttackDefinition } from '../interfaces/IAttackDefinition';
+import type { IStatusEffectData } from '../interfaces/IStatusEffect';
+import { GameEvent } from '../../common/events';
 
 const CHARACTER_SPRITE_KEYS = [
     'character_front_1', 'character_front_2', 'character_front_3', 'character_front_4',
@@ -41,9 +46,15 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private dashEndTime = 0;
     private lastDashTime = 0;
 
+    // Character information
+    private characterId: string;
+
+    // Attack management
+    public activeAttacks: IAttackInstance[] = [];
+
     // Auto-shooting properties
     private targetEnemy: EnemySprite | null = null;
-    private shootingTimer: Phaser.Time.TimerEvent | null = null;
+    private shootingTimers: Map<string, Phaser.Time.TimerEvent> = new Map();
     private enemies: Phaser.GameObjects.GameObject[] = [];
 
     // Network-related properties
@@ -59,28 +70,69 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     private keyS: Phaser.Input.Keyboard.Key | undefined;
     private keyD: Phaser.Input.Keyboard.Key | undefined;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, playerId: string, particleSystem?: ParticleSystem) {
-        const randomSpriteKey = Phaser.Math.RND.pick(CHARACTER_SPRITE_KEYS);
+    constructor(scene: Phaser.Scene, x: number, y: number, playerId: string, characterId: string | unknown = "1", particleSystem?: ParticleSystem) {
+        // Parse characterId first to ensure it's a valid string
+        let charId: string;
+        if (characterId === undefined || characterId === null) {
+            charId = "1"; // Default to 1 if undefined or null
+        } else if (typeof characterId === 'object') {
+            // Handle object case - convert to string
+            charId = String(characterId) || "1";
+        } else {
+            // Handle primitive types
+            charId = String(characterId);
+        }
+        
+        // Use character ID to select the appropriate sprite
+        // Ensure it's within valid range (1-20)
+        const numCharId = parseInt(charId, 10);
+        const validCharId = !isNaN(numCharId) && numCharId >= 1 && numCharId <= 20 ? numCharId : 1;
+        const spriteKey = `character_front_${validCharId}`;
+        
+        // Ensure sprite key exists in the array
+        if (!CHARACTER_SPRITE_KEYS.includes(spriteKey)) {
+            console.warn(`Sprite key ${spriteKey} not found in CHARACTER_SPRITE_KEYS. Using default.`);
+            // Fall back to character 1 if the sprite doesn't exist
+            charId = "1";
+        }
 
-        super(scene, x, y, randomSpriteKey, playerId,
-            DEFAULT_PLAYER_STATS.maxHealth, 
-            DEFAULT_PLAYER_STATS.movementSpeed, 
-            DEFAULT_PLAYER_STATS.defense, // Pass defense to EntitySprite constructor
+        super(scene, x, y, spriteKey, playerId,
+            DEFAULT_PLAYER_BASE_STATS.maxHp, 
+            DEFAULT_PLAYER_BASE_STATS.maxSpeed, 
+            DEFAULT_PLAYER_BASE_STATS.defense, // Pass defense to EntitySprite constructor
             particleSystem 
             );
         this.playerId = playerId; 
+        // Store the validated character ID
+        this.characterId = charId;
+        
         this.dashCooldown = 0; 
         this.accelerationFactor = 0.1; 
-        this.decelerationFactor = 0.1; 
+        this.decelerationFactor = 0.1;
 
-        // Further initialize baseStats with player-specific defaults from PlayerStats.ts
-        // EntitySprite constructor already sets defaults for attackCooldown, projectileDamage, projectileSpeed.
-        // We override them here for the player specifically.
-        this.baseStats.attackCooldown = DEFAULT_PLAYER_STATS.attackSpeed;
-        this.baseStats.projectileDamage = DEFAULT_PLAYER_STATS.projectileDamage;
-        this.baseStats.projectileSpeed = DEFAULT_PLAYER_STATS.projectileSpeed;
-        this.baseStats.projectileSize = DEFAULT_PLAYER_STATS.projectileSize; // New stat
-        // Add other player-specific base stats if any, e.g., this.baseStats.pickupRadius = X;
+        // Initialize baseStats with player-specific defaults
+        // EntitySprite constructor already sets basic stats
+        // We override them here specifically for the player
+        this.baseStats = {
+            ...this.baseStats,
+            // Copy over the new player-specific stats
+            maxHp: DEFAULT_PLAYER_BASE_STATS.maxHp,
+            hp: DEFAULT_PLAYER_BASE_STATS.currentHp,
+            maxSpeed: DEFAULT_PLAYER_BASE_STATS.maxSpeed,
+            defense: DEFAULT_PLAYER_BASE_STATS.defense,
+            attackCooldownModifier: DEFAULT_PLAYER_BASE_STATS.attackCooldownModifier,
+            damageModifier: DEFAULT_PLAYER_BASE_STATS.damageModifier,
+            projectileSpeedModifier: DEFAULT_PLAYER_BASE_STATS.projectileSpeedModifier,
+            projectileSizeModifier: DEFAULT_PLAYER_BASE_STATS.projectileSizeModifier,
+            areaOfEffectModifier: DEFAULT_PLAYER_BASE_STATS.areaOfEffectModifier,
+            effectDurationModifier: DEFAULT_PLAYER_BASE_STATS.effectDurationModifier,
+            xpGainModifier: DEFAULT_PLAYER_BASE_STATS.xpGainModifier,
+            pickupRadiusModifier: DEFAULT_PLAYER_BASE_STATS.pickupRadiusModifier,
+            luck: DEFAULT_PLAYER_BASE_STATS.luck,
+            baseCriticalHitChance: DEFAULT_PLAYER_BASE_STATS.baseCriticalHitChance,
+            criticalHitDamageMultiplier: DEFAULT_PLAYER_BASE_STATS.criticalHitDamageMultiplier
+        };
+        this.currentStats = { ...this.baseStats };
 
         if (this.body instanceof Phaser.Physics.Arcade.Body) {
             const offsetX = (PLAYER_WIDTH - PLAYER_PHYSICS_WIDTH) / 2;
@@ -89,11 +141,10 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             this.body.setOffset(offsetX, offsetY);
         }
 
-        // Removed direct assignments like this.projectileDamage, this.shootCooldown etc.
-        // They are now managed by baseStats and currentStats via EntitySprite.
+        // Initialize player's starting attacks from character definition
+        this.initializeAttacks();
 
-        this.initAutoShooting();
-
+        // Initialize input keys
         if (scene.input.keyboard) {
             this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
             this.keyA = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -103,79 +154,530 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
             console.warn('PlayerSprite: Keyboard input system not available in the scene. WASD keys will not work.');
         }
 
-        this.scene.events.on('playerStatsUpdated', this.updateStats, this);
+        this.scene.events.on(GameEvent.PLAYER_STATS_UPDATED, this.updateStats, this);
         this.playerPhysicsHeight = PLAYER_PHYSICS_HEIGHT; 
 
         this.recalculateStats(); // Important: Calculate currentStats after all baseStats are set.
+    }
+
+    /**
+     * Makes the player sprite face a given x-coordinate.
+     * @param targetX The x-coordinate to face.
+     */
+    private faceTarget(targetX: number): void {
+        if (targetX < this.x) {
+            this.setFlipX(true);
+        } else {
+            this.setFlipX(false);
+        }
+    }
+
+    /**
+     * Initialize player's attacks based on their character definition
+     */
+    private initializeAttacks(): void {
+        const charId = this.characterId;
+        const dataManager = DataManager.getInstance();
+        const characterDef = dataManager.getCharacterDefinition(charId);
+        
+        if (!characterDef) {
+            console.warn(`PlayerSprite: No character definition found for ID: ${charId}`);
+            // Fallback to a default character definition if none is found
+            const defaultCharacterDef = dataManager.getCharacterDefinition("1");
+            if (defaultCharacterDef) {
+                this.initializeAttacksFromDefinition(defaultCharacterDef);
+            } else {
+                console.error(`PlayerSprite: Could not find default character definition either. No attacks initialized.`);
+                this.activeAttacks = [];
+            }
+            return;
+        }
+        
+        this.initializeAttacksFromDefinition(characterDef);
+    }
+    
+    /**
+     * Initialize attacks from a character definition
+     */
+    private initializeAttacksFromDefinition(characterDef: any): void {
+        // Clear any existing attacks
+        this.activeAttacks = [];
+        
+        // Handle the case where startingAttacks might not be defined
+        const startingAttacks = characterDef.startingAttacks || [];
+        
+        // Add attacks from character definition
+        for (const attackId of startingAttacks) {
+            const attackDef = DataManager.getInstance().getAttackDefinition(attackId);
+            
+            if (attackDef) {
+                this.activeAttacks.push({
+                    definition: attackDef,
+                    currentCooldown: 0,
+                    lastFiredTimestamp: 0
+                });
+            } else {
+                console.warn(`PlayerSprite: Attack definition not found for ID: ${attackId}`);
+            }
+        }
+        
+        // If no attacks were initialized, add a default attack
+        if (this.activeAttacks.length === 0) {
+            const defaultAttackDef = DataManager.getInstance().getAttackDefinition("FIST_PUNCH");
+            if (defaultAttackDef) {
+                this.activeAttacks.push({
+                    definition: defaultAttackDef,
+                    currentCooldown: 0,
+                    lastFiredTimestamp: 0
+                });
+            }
+        }
+        
+        // Initialize attack timers
+        this.initializeAttackTimers();
+    }
+
+    /**
+     * Set up timers for each attack
+     */
+    private initializeAttackTimers(): void {
+        // Clear any existing timers
+        this.shootingTimers.forEach(timer => timer.destroy());
+        this.shootingTimers.clear();
+        
+        // Create a timer for each attack
+        this.activeAttacks.forEach(attack => {
+            const effectiveCooldown = this.calculateEffectiveAttackCooldown(attack);
+            const timer = this.scene.time.addEvent({
+                delay: effectiveCooldown,
+                callback: () => this.attemptAttack(attack),
+                callbackScope: this,
+                loop: true
+            });
+            
+            this.shootingTimers.set(attack.definition.id, timer);
+        });
+    }
+
+    /**
+     * Calculate the effective cooldown for an attack taking player modifiers into account
+     */
+    private calculateEffectiveAttackCooldown(attack: IAttackInstance): number {
+        const baseCooldown = attack.definition.attackCooldown;
+        const modifier = this.currentStats.attackCooldownModifier ?? 1.0;
+        const effectiveCooldown = baseCooldown * modifier;
+        
+        // Ensure minimum cooldown
+        return Math.max(effectiveCooldown, MINIMUM_SHOOT_COOLDOWN_MS);
+    }
+
+    /**
+     * Attempt to use an attack
+     */
+    private attemptAttack(attack: IAttackInstance): void {
+        if (!this.active) return;
+        
+        const currentTime = this.scene.time.now;
+        
+        // Skip if on cooldown
+        if (currentTime < (attack.lastFiredTimestamp || 0) + this.calculateEffectiveAttackCooldown(attack)) {
+            return;
+        }
+        
+        // Execute the attack based on its type
+        switch (attack.definition.type) {
+            case 'RANGED':
+                this.executeRangedAttack(attack);
+                break;
+            case 'MELEE':
+                this.executeMeleeAttack(attack);
+                break;
+            case 'SUPPORT':
+                // Support attacks would target allies - not implemented yet
+                break;
+            case 'BUFF_SELF':
+                this.executeBuffSelfAttack(attack);
+                break;
+            case 'RANGED_AREA_DENIAL':
+                this.executeRangedAreaDenialAttack(attack);
+                break;
+            case 'MELEE_AREA_CONTINUOUS':
+                this.executeMeleeAreaContinuousAttack(attack);
+                break;
+            default:
+                console.warn(`PlayerSprite: Unknown attack type: ${attack.definition.type}`);
+                break;
+        }
+        
+        // Update last fired timestamp
+        attack.lastFiredTimestamp = currentTime;
+    }
+
+    /**
+     * Execute a ranged attack
+     */
+    private executeRangedAttack(attack: IAttackInstance, targetPos?: Phaser.Math.Vector2): void {
+        let finalTargetPos: Phaser.Math.Vector2 | undefined = targetPos;
+
+        if (!finalTargetPos) {
+            // Get the attack range
+            const attackRange = attack.effectiveRange ?? attack.definition.range ?? AUTO_SHOOT_RANGE;
+
+            // Check if current target is valid and within range
+            if (this.targetEnemy && this.targetEnemy.active) {
+                const distanceToTarget = Phaser.Math.Distance.Between(
+                    this.x, this.y, this.targetEnemy.x, this.targetEnemy.y
+                );
+                
+                // If target is out of range, find a new one
+                if (distanceToTarget > attackRange) {
+                    this.targetEnemy = this.findNearestEnemy(attackRange);
+                }
+            } else {
+                // Try to find a new target if one isn't set or is inactive
+                this.targetEnemy = this.findNearestEnemy(attackRange);
+            }
+            
+            // If we have a valid target, set the finalTargetPos
+            if (this.targetEnemy && this.targetEnemy.active) {
+                finalTargetPos = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
+            } else {
+                return; // No valid target found within range
+            }
+        }
+
+        // Calculate effective damage and check for critical hit
+        const baseDamage = attack.definition.damage || 0;
+        const baseEffectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        const isCritical = Math.random() < this.getEffectiveCriticalHitChance();
+        const finalDamage = isCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
+        
+        // Handle multi-projectile attacks
+        const projectilesPerShot = attack.definition.projectilesPerShot || 1;
+        const spreadAngle = attack.definition.spreadAngle || 0;
+        
+        let direction: Phaser.Math.Vector2;
+
+        if (projectilesPerShot === 1) {
+            // Single projectile
+            direction = new Phaser.Math.Vector2(finalTargetPos.x - this.x, finalTargetPos.y - this.y).normalize();
+            this.fireProjectile(attack, finalDamage, direction, isCritical); // Pass isCritical
+        } else {
+            // Multiple projectiles with spread
+            const baseDirection = new Phaser.Math.Vector2(finalTargetPos.x - this.x, finalTargetPos.y - this.y).normalize();
+            const angleStep = spreadAngle / (projectilesPerShot - 1);
+            const startAngle = baseDirection.angle() - spreadAngle / 2;
+
+            for (let i = 0; i < projectilesPerShot; i++) {
+                const currentAngle = startAngle + i * angleStep;
+                direction = new Phaser.Math.Vector2(Math.cos(currentAngle), Math.sin(currentAngle));
+                // Recalculate crit status for each projectile independently
+                const isMultiCritical = Math.random() < this.getEffectiveCriticalHitChance();
+                const finalMultiDamage = isMultiCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
+                this.fireProjectile(attack, finalMultiDamage, direction, isMultiCritical); // Pass isCritical
+            }
+        }
+
+        this.faceTarget(finalTargetPos.x);
+    }
+
+    /**
+     * Fire a projectile for a ranged attack
+     */
+    private fireProjectile(attack: IAttackInstance, damage: number, direction: Phaser.Math.Vector2, isCritical: boolean): void {
+        // Get projectile type from attack definition
+        const projectileType = attack.definition.projectileType || 'BULLET';
+        
+        // Calculate effective projectile speed
+        const baseProjectileSpeed = 300; // Default if not specified
+        const effectiveSpeed = baseProjectileSpeed * (this.currentStats.projectileSpeedModifier ?? 1.0);
+        
+        // Calculate effective projectile size
+        const effectiveSize = this.currentStats.projectileSizeModifier ?? 1.0;
+        
+        // Calculate projectile lifespan based on range
+        const range = attack.definition.range || 200;
+        const lifespan = (range / effectiveSpeed) * 1000; // Convert to milliseconds
+        
+        // Emit event to spawn projectile
+        this.scene.events.emit(GameEvent.ENTITY_SHOOT_PROJECTILE, {
+            shooter: this,
+            projectileType: projectileType,
+            damage: damage,
+            knockbackForce: attack.definition.knockbackForce || 0,
+            projectileSpeed: effectiveSpeed,
+            projectileScale: effectiveSize,
+            lifespan: lifespan,
+            direction: direction,
+            x: this.x + direction.x * (this.width / 2 + 10),
+            y: this.y + direction.y * (this.height / 2),
+            attackDef: attack.definition, // Pass the full attack definition for additional properties
+            statusEffectOnHit: attack.definition.statusEffectOnHit,
+            isCritical: isCritical
+        });
+    }
+
+    /**
+     * Execute a melee attack
+     */
+    private executeMeleeAttack(attack: IAttackInstance): void {
+        const range = attack.definition.range || 50;
+        const aoeRange = attack.definition.areaOfEffect?.radius || range;
+        const effectiveRange = aoeRange * (this.currentStats.areaOfEffectModifier ?? 1.0);
+        
+        // Find enemies in range
+        const enemiesInRange = this.findEnemiesInRange(effectiveRange);
+
+        if (enemiesInRange.length === 0) {
+            // Optionally play a 'miss' sound or animation if needed
+            return; 
+        }
+        
+        // Determine direction for facing (e.g., towards the closest enemy)
+        let closestEnemy: EnemySprite | null = null;
+        let minDistance = Infinity;
+        for (const enemy of enemiesInRange) {
+            if (enemy && enemy.active) {
+                const distance = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestEnemy = enemy;
+                }
+            }
+        }
+        if (closestEnemy) {
+            this.faceTarget(closestEnemy.x);
+        }
+        
+        // Calculate effective damage and check for critical hit
+        const baseDamage = attack.definition.damage || 0;
+        const baseEffectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        // We calculate crit once for the entire melee swing/AoE
+        const isCritical = Math.random() < this.getEffectiveCriticalHitChance(); 
+        const finalDamage = isCritical ? baseEffectiveDamage * (this.currentStats.criticalHitDamageMultiplier ?? 1.0) : baseEffectiveDamage;
+        
+        // Apply damage to all enemies in range
+        for (const enemy of enemiesInRange) {
+            if (!enemy || !enemy.active) continue;
+
+            enemy.takeDamage(finalDamage, this, isCritical); // Pass isCritical to takeDamage
+
+            // Apply knockback if specified
+            if (attack.definition.knockbackForce) {
+                const direction = new Phaser.Math.Vector2(enemy.x - this.x, enemy.y - this.y).normalize();
+                enemy.applyKnockback(direction, attack.definition.knockbackForce);
+            }
+
+            // Apply status effect if specified
+            if (attack.definition.statusEffectOnHit) {
+                const effectData = attack.definition.statusEffectOnHit;
+                enemy.applyStatusEffect({
+                    id: `${effectData.effectType}_${Date.now()}`,
+                    name: effectData.effectType, 
+                    type: effectData.effectType,
+                    duration: (effectData.duration ?? 0) * (this.currentStats.effectDurationModifier ?? 1.0),
+                    potency: effectData.potency
+                }, this);
+            }
+        }
+        
+        // Play attack particle effect if available (e.g., a slash or impact effect)
+        if (this.particleSystem && attack.definition.hitParticleEffect) {
+            // Example: Play effect at player's position or an average position of hit enemies
+            this.particleSystem.playEffect(attack.definition.hitParticleEffect, this.x, this.y);
+        }
+        
+        // Play attack sound if available
+        if (attack.definition.hitSoundKey) {
+            // this.scene.sound.play(attack.definition.hitSoundKey);
+        }
+    }
+
+    /**
+     * Execute a buff self attack
+     */
+    private executeBuffSelfAttack(attack: IAttackInstance): void {
+        // Apply self buff if specified
+        if (attack.definition.statusEffectOnSelf) {
+            const effectData = attack.definition.statusEffectOnSelf;
+            const statusEffect: IStatusEffectData = {
+                id: `${effectData.effectType}_${Date.now()}`, // Generate unique ID
+                name: effectData.effectType, // Use effect type as name if not specified
+                type: effectData.effectType,
+                duration: (effectData.duration ?? 0) * (this.currentStats.effectDurationModifier ?? 1.0),
+                potency: effectData.potency
+            };
+            this.applyStatusEffect(statusEffect, this);
+        }
+        
+        // Play buff particle/sound effects if available
+        if (this.particleSystem && attack.definition.hitParticleEffect) {
+            this.particleSystem.playEffect(attack.definition.hitParticleEffect, this.x, this.y);
+        }
+        
+        // TODO: Play sound effect if available
+    }
+
+    /**
+     * Execute a ranged area denial attack
+     */
+    private executeRangedAreaDenialAttack(attack: IAttackInstance): void {
+        // Similar to ranged attack but creates an area effect at the target location
+        this.targetEnemy = this.findNearestEnemy();
+        
+        if (!this.targetEnemy?.active) {
+            return; // No valid target
+        }
+        
+        // Calculate direction to the target
+        const targetPosition = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
+        const direction = new Phaser.Math.Vector2(targetPosition.x - this.x, targetPosition.y - this.y).normalize();
+        
+        // Face the target
+        this.faceTarget(targetPosition.x);
+        
+        // TODO: Implement area denial attack logic
+        // This would typically spawn a projectile that creates an area effect on impact
+        // For now, we'll just use the basic projectile system
+        
+        const baseDamage = attack.definition.damage || 0;
+        const effectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        
+        this.fireProjectile(attack, effectiveDamage, direction, false);
+    }
+
+    /**
+     * Execute a melee area continuous attack
+     */
+    private executeMeleeAreaContinuousAttack(attack: IAttackInstance): void {
+        // Similar to melee attack but deals damage over time in an area
+        const range = attack.definition.range || 50;
+        const aoeRange = attack.definition.areaOfEffect?.radius || range;
+        const effectiveRange = aoeRange * (this.currentStats.areaOfEffectModifier ?? 1.0);
+        
+        // Find enemies in range
+        const enemiesInRange = this.findEnemiesInRange(effectiveRange);
+        
+        if (enemiesInRange.length === 0) {
+            return; // No enemies in range
+        }
+        
+        // Determine direction for facing (e.g., towards the closest enemy)
+        let closestEnemyInContinuous: EnemySprite | null = null;
+        let minDistanceContinuous = Infinity;
+        for (const enemy of enemiesInRange) {
+            if (enemy && enemy.active) {
+                const distance = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+                if (distance < minDistanceContinuous) {
+                    minDistanceContinuous = distance;
+                    closestEnemyInContinuous = enemy;
+                }
+            }
+        }
+        if (closestEnemyInContinuous) {
+            this.faceTarget(closestEnemyInContinuous.x);
+        }
+        
+        // Calculate effective damage
+        const baseDamage = attack.definition.damage || 0;
+        const effectiveDamage = baseDamage * (this.currentStats.damageModifier ?? 1.0);
+        
+        // Apply damage to all enemies in range
+        for (const enemy of enemiesInRange) {
+            enemy.takeDamage(effectiveDamage, this, false);
+            
+            // Apply status effect if specified
+            if (attack.definition.statusEffectOnHit) {
+                const effectData = attack.definition.statusEffectOnHit;
+                enemy.applyStatusEffect({
+                    id: `${effectData.effectType}_${Date.now()}`,
+                    name: effectData.effectType,
+                    type: effectData.effectType,
+                    duration: (effectData.duration ?? 0) * (this.currentStats.effectDurationModifier ?? 1.0),
+                    potency: effectData.potency
+                }, this);
+            }
+        }
+        
+        // Play continuous attack particle effects if available
+        if (this.particleSystem && attack.definition.hitParticleEffect) {
+            this.particleSystem.playEffect(attack.definition.hitParticleEffect, this.x, this.y);
+        }
+        
+        // TODO: Play sound effect if available
+    }
+
+    /**
+     * Find enemies within a certain range
+     */
+    private findEnemiesInRange(range: number): EnemySprite[] {
+        const enemiesInRange: EnemySprite[] = [];
+        
+        for (const enemyObj of this.enemies) {
+            const enemy = enemyObj as EnemySprite;
+            if (!enemy.active) continue;
+            
+            const distance = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+            if (distance <= range) {
+                enemiesInRange.push(enemy);
+            }
+        }
+        
+        return enemiesInRange;
     }
 
     public updateStats(newStats: IPlayerStats): void {
         // Store previous maxHp to see if we need to heal
         const previousMaxHp = this.baseStats.maxHp;
 
-        this.baseStats.maxSpeed = newStats.movementSpeed;
-        this.baseStats.projectileSpeed = newStats.projectileSpeed;
-        this.baseStats.projectileDamage = newStats.projectileDamage;
-        this.baseStats.projectileSize = newStats.projectileSize; 
+        // Update all relevant stats from the passed in newStats
+        this.baseStats.maxHp = newStats.maxHp;
+        this.baseStats.maxSpeed = newStats.maxSpeed;
         this.baseStats.defense = newStats.defense;
-        this.baseStats.maxHp = newStats.maxHealth;
-
-        let newAttackSpeedValue = newStats.attackSpeed;
-        if (newAttackSpeedValue < MINIMUM_SHOOT_COOLDOWN_MS) {
-            console.warn(`PlayerSprite: attackSpeed ${newAttackSpeedValue}ms too low, clamping to ${MINIMUM_SHOOT_COOLDOWN_MS}ms`);
-            newAttackSpeedValue = MINIMUM_SHOOT_COOLDOWN_MS;
-        }
-        
-        const attackCooldownChanged = this.baseStats.attackCooldown !== newAttackSpeedValue;
-        this.baseStats.attackCooldown = newAttackSpeedValue;
+        this.baseStats.attackCooldownModifier = newStats.attackCooldownModifier;
+        this.baseStats.damageModifier = newStats.damageModifier;
+        this.baseStats.projectileSpeedModifier = newStats.projectileSpeedModifier;
+        this.baseStats.projectileSizeModifier = newStats.projectileSizeModifier;
+        this.baseStats.areaOfEffectModifier = newStats.areaOfEffectModifier;
+        this.baseStats.effectDurationModifier = newStats.effectDurationModifier;
+        this.baseStats.xpGainModifier = newStats.xpGainModifier;
+        this.baseStats.pickupRadiusModifier = newStats.pickupRadiusModifier;
+        this.baseStats.luck = newStats.luck;
+        this.baseStats.baseCriticalHitChance = newStats.baseCriticalHitChance;
+        this.baseStats.criticalHitDamageMultiplier = newStats.criticalHitDamageMultiplier;
 
         this.recalculateStats(); // Recalculate currentStats based on new baseStats
 
-        // If maxHp increased, heal the player to the new maxHp
-        // Also handles the initial case where hp might not be at max after recalculateStats
-        if (this.baseStats.maxHp > previousMaxHp || this.currentStats.hp < this.currentStats.maxHp) {
-             // Heal to full if maxHP increased or current HP is less than current maxHP for any other reason.
-            this.currentStats.hp = this.currentStats.maxHp; 
-        }
-        // Ensure health bar reflects the (potentially) new HP value immediately after healing
-        this.updateHealthBar(); 
+        // Don't heal when maxHp increases - keep current HP as is
+        // Just ensure it doesn't exceed the new max HP
+        this.currentStats.hp = Math.min(this.currentStats.hp, this.currentStats.maxHp);
+        
+        // Ensure health bar reflects the updated HP value
+        this.updateHealthBar();
 
-        if (attackCooldownChanged) {
-            if (this.shootingTimer) {
-                this.shootingTimer.destroy(); 
-            }
-            this.initAutoShooting(); 
-        }
+        // Update attack timers with new cooldown modifiers
+        this.initializeAttackTimers();
     }
 
     public getProjectileScale(): number {
-        return this.currentStats.projectileSize ?? 1.0;
+        return this.currentStats.projectileSizeModifier ?? 1.0;
     }
 
-    // Initialize auto-shooting system
-    private initAutoShooting(): void {
-        if (this.shootingTimer) {
-            this.shootingTimer.destroy();
-        }
-        this.shootingTimer = this.scene.time.addEvent({
-            delay: this.currentStats.attackCooldown || DEFAULT_PLAYER_STATS.attackSpeed,
-            callback: this.attemptAutoShoot,
-            callbackScope: this,
-            loop: true
-        });
-    }
-
-    // Update the list of enemies to target
+    /**
+     * Update the list of enemies to target
+     */
     public updateEnemiesInRange(enemies: Phaser.GameObjects.GameObject[]): void {
         this.enemies = enemies;
     }
 
-    // Find and target the nearest enemy
-    private findNearestEnemy(): EnemySprite | null {
+    /**
+     * Find and target the nearest enemy
+     */
+    private findNearestEnemy(range: number = AUTO_SHOOT_RANGE): EnemySprite | null {
         if (!this.enemies || this.enemies.length === 0) return null;
 
         let nearestEnemy: EnemySprite | null = null;
-        let shortestDistance = AUTO_SHOOT_RANGE;
+        let shortestDistance = range;
 
         for (const enemyObj of this.enemies) {
             const enemy = enemyObj as EnemySprite;
@@ -191,25 +693,189 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         return nearestEnemy;
     }
 
-    // Automatically shoot at the nearest enemy
-    private attemptAutoShoot(): void {
-        if (!this.active) return;
-
-        // Always find the nearest enemy every time
-        this.targetEnemy = this.findNearestEnemy();
-
-        // If we have a target, shoot at it
-        if (this.targetEnemy?.active) {
-            const targetPosition = new Phaser.Math.Vector2(this.targetEnemy.x, this.targetEnemy.y);
-            this.attemptShoot(targetPosition);
-
-            // Flip player based on target direction
-            if (this.targetEnemy.x < this.x) {
-                this.setFlipX(true);
-            } else {
-                this.setFlipX(false);
+    /**
+     * Process attack cooldowns and execute attacks
+     */
+    public updateAttacks(time: number, delta: number): void {
+        // Update cooldowns for all attacks
+        for (const attack of this.activeAttacks) {
+            if (attack.currentCooldown > 0) {
+                attack.currentCooldown -= delta;
             }
         }
+        
+        // Periodically refresh the target enemy (every ~500ms)
+        if (time % 500 < 20) { // Small window to avoid calling every frame
+            this.targetEnemy = this.findNearestEnemy();
+        }
+    }
+
+    /**
+     * Add a new attack to the player's active attacks
+     */
+    public addAttack(attackId: string): boolean {
+        // Check if attack already exists
+        if (this.activeAttacks.some(attack => attack.definition.id === attackId)) {
+            console.warn(`PlayerSprite: Attack ${attackId} already exists on player`);
+            return false;
+        }
+        
+        // Get attack definition
+        const dataManager = DataManager.getInstance();
+        const attackDef = dataManager.getAttackDefinition(attackId);
+        
+        if (!attackDef) {
+            console.warn(`PlayerSprite: Attack definition not found for ID: ${attackId}`);
+            return false;
+        }
+        
+        // Add attack
+        const newAttack: IAttackInstance = {
+            definition: attackDef,
+            currentCooldown: 0,
+            lastFiredTimestamp: 0
+        };
+        
+        this.activeAttacks.push(newAttack);
+        
+        // Add timer for the attack
+        const effectiveCooldown = this.calculateEffectiveAttackCooldown(newAttack);
+        const timer = this.scene.time.addEvent({
+            delay: effectiveCooldown,
+            callback: () => this.attemptAttack(newAttack),
+            callbackScope: this,
+            loop: true
+        });
+        
+        this.shootingTimers.set(attackDef.id, timer);
+        
+        return true;
+    }
+
+    /**
+     * Upgrade an existing attack
+     */
+    public upgradeAttack(attackId: string, modifier: string, stat: string, value: any): boolean {
+        const attackIndex = this.activeAttacks.findIndex(a => a.definition.id === attackId);
+        if (attackIndex === -1) {
+            console.warn(`PlayerSprite: Attack ${attackId} not found for upgrade.`);
+            return false;
+        }
+        const attack = this.activeAttacks[attackIndex];
+        // Robust check for attack instance
+        if (!attack || !attack.definition) { 
+            console.warn(`PlayerSprite: Attack instance or definition for ${attackId} is undefined after findIndex.`);
+            return false;
+        }
+
+        const modifierType = modifier || "FLAT_ADD"; 
+        
+        // Apply the upgrade based on modifier type
+        switch (modifierType) {
+            case 'FLAT_SET':
+                // Directly set the value
+                // This would require modifying the attack definition, which we don't want to do
+                // Instead, we'll store the effective value on the instance
+                switch (stat) {
+                    case 'damage':
+                        attack.effectiveDamage = value;
+                        break;
+                    case 'attackCooldown':
+                        attack.effectiveAttackCooldown = value;
+                        // Update the timer
+                        this.updateAttackTimer(attack);
+                        break;
+                    case 'range':
+                        attack.effectiveRange = value;
+                        break;
+                    case 'projectilesPerShot':
+                        attack.effectiveProjectilesPerShot = value;
+                        break;
+                    // Add more cases as needed
+                    default:
+                        console.warn(`PlayerSprite: Unknown stat ${stat} for upgrade`);
+                        return false;
+                }
+                break;
+                
+            case 'FLAT_ADD':
+                // Add to the current value
+                switch (stat) {
+                    case 'damage':
+                        attack.effectiveDamage = (attack.effectiveDamage ?? attack.definition.damage ?? 0) + value;
+                        break;
+                    case 'attackCooldown':
+                        attack.effectiveAttackCooldown = (attack.effectiveAttackCooldown ?? attack.definition.attackCooldown ?? 0) + value;
+                        // Update the timer
+                        this.updateAttackTimer(attack);
+                        break;
+                    case 'range':
+                        attack.effectiveRange = (attack.effectiveRange ?? attack.definition.range ?? 0) + value;
+                        break;
+                    case 'projectilesPerShot':
+                        attack.effectiveProjectilesPerShot = (attack.effectiveProjectilesPerShot ?? attack.definition.projectilesPerShot ?? 1) + value;
+                        break;
+                    // Add more cases as needed
+                    default:
+                        console.warn(`PlayerSprite: Unknown stat ${stat} for upgrade`);
+                        return false;
+                }
+                break;
+                
+            case 'PERCENTAGE_MULTIPLY':
+                // Multiply the current value by the percentage
+                switch (stat) {
+                    case 'damage':
+                        attack.effectiveDamage = (attack.effectiveDamage ?? attack.definition.damage ?? 0) * value;
+                        break;
+                    case 'attackCooldown':
+                        attack.effectiveAttackCooldown = (attack.effectiveAttackCooldown ?? attack.definition.attackCooldown ?? 0) * value;
+                        // Update the timer
+                        this.updateAttackTimer(attack);
+                        break;
+                    case 'range':
+                        attack.effectiveRange = (attack.effectiveRange ?? attack.definition.range ?? 0) * value;
+                        break;
+                    case 'projectilesPerShot':
+                        attack.effectiveProjectilesPerShot = (attack.effectiveProjectilesPerShot ?? attack.definition.projectilesPerShot ?? 1) * value;
+                        break;
+                    // Add more cases as needed
+                    default:
+                        console.warn(`PlayerSprite: Unknown stat ${stat} for upgrade`);
+                        return false;
+                }
+                break;
+                
+            default:
+                console.warn(`PlayerSprite: Unknown modifier ${modifier} for upgrade`);
+                return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Update the timer for an attack after its cooldown has been modified
+     */
+    private updateAttackTimer(attack: IAttackInstance): void {
+        // Get the timer
+        const timer = this.shootingTimers.get(attack.definition.id);
+        
+        if (!timer) {
+            console.warn(`PlayerSprite: Timer not found for attack ${attack.definition.id}`);
+            return;
+        }
+        
+        // Calculate new cooldown
+        const effectiveCooldown = this.calculateEffectiveAttackCooldown(attack);
+        
+        // Update timer
+        timer.reset({
+            delay: effectiveCooldown,
+            callback: () => this.attemptAttack(attack),
+            callbackScope: this,
+            loop: true
+        });
     }
 
     /**
@@ -238,7 +904,7 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
         if (!this.body) return;
 
         const body = this.body as Phaser.Physics.Arcade.Body;
-        const speed = this.currentStats.maxSpeed || DEFAULT_PLAYER_STATS.movementSpeed; // Use currentStats
+        const speed = this.currentStats.maxSpeed || DEFAULT_PLAYER_BASE_STATS.maxSpeed; // Use currentStats
 
         let targetVelocityX = 0;
         let targetVelocityY = 0;
@@ -312,6 +978,17 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
     }
 
     /**
+     * Main update method called by the scene
+     */
+    override update(time: number, delta: number): void {
+        // Call parent update
+        super.update(time, delta);
+        
+        // Update attacks
+        this.updateAttacks(time, delta);
+    }
+
+    /**
      * Updates the player's position from network data (for remote players)
      */
     public updateFromNetwork(x: number, y: number): void {
@@ -369,14 +1046,26 @@ export class PlayerSprite extends EntitySprite implements NetworkAware {
 
     // Clean up resources when destroyed
     destroy(fromScene?: boolean): void {
-        if (this.shootingTimer) {
-            this.shootingTimer.destroy();
-            this.shootingTimer = null;
-        }
+        // Clean up all timers
+        this.shootingTimers.forEach(timer => timer.destroy());
+        this.shootingTimers.clear();
+        
         // Ensure scene context still exists before trying to remove listeners
         if (this.scene) {
-            this.scene.events.off('playerStatsUpdated', this.updateStats, this); // Clean up listener
+            this.scene.events.off(GameEvent.PLAYER_STATS_UPDATED, this.updateStats, this); // Clean up listener
         }
         super.destroy(fromScene);
+    }
+
+    /**
+     * Calculates the effective critical hit chance based on base chance and luck.
+     * @returns The calculated critical hit chance (e.g., 0.1 for 10%).
+     */
+    public getEffectiveCriticalHitChance(): number {
+        const LUCK_TO_CRIT_CHANCE_CONVERSION = 0.001; // 1 point of luck adds 0.1% crit chance
+        const baseCrit = this.currentStats.baseCriticalHitChance ?? 0;
+        const luckBonus = (this.currentStats.luck ?? 0) * LUCK_TO_CRIT_CHANCE_CONVERSION;
+        // Clamp the result between 0 and 1 (0% and 100%)
+        return Math.max(0, Math.min(1, baseCrit + luckBonus)); 
     }
 } 

@@ -28,7 +28,6 @@ class StatusEffectFactory {
             // The definition should conform to IStatusEffectData now with customData included in the interface
             this.effectDefinitions.set(definition.id, definition);
         }
-        console.log(`StatusEffectFactory: Loaded ${this.effectDefinitions.size} status effect definitions.`);
     }
 
     public registerEffectType(type: string, EffectCtor: StatusEffectConstructor): void { // Renamed constructor to EffectCtor

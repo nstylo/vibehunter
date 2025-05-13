@@ -7,18 +7,27 @@ import type { EntitySprite } from '../objects/EntitySprite'; // Changed to type-
 import { EnemySpawner, type WaveDefinition } from '../systems/EnemySpawner'; // Updated import
 import NetworkSystem from '../systems/NetworkSystem';
 import {
-    EVENT_ENTITY_SHOOT_PROJECTILE,
-    EVENT_PROJECTILE_SPAWNED,
-    EVENT_ENTITY_TAKE_DAMAGE,
-    EVENT_PROJECTILE_HIT_ENTITY,
-    EVENT_ENTITY_DIED
-} from '../../common/events';
+    GameEvent
+} from '../../common/events'; // Use the enum
 import { ProgressionSystem } from '../systems/ProgressionSystem'; // Import ProgressionSystem
 import { ParticleSystem } from '../systems/ParticleSystem'; // Added import
 import { type RemotePlayerData, type ServerMessage, isPlayerPositionsMessage } from '../types/multiplayer'; // Import multiplayer types
 import WAVE_DEFINITIONS from '../definitions/waves.json'; // Import WAVE_DEFINITIONS
 import GAME_ENEMY_DEFINITIONS from '../definitions/enemies.json'; // Import game enemy definitions
 import { HitboxCollisionManager } from '../world/HitboxCollisionManager'; // ADDED
+import { EnemyDebugDisplay, PlayerDebugDisplay } from '../debug'; // UPDATED: Import debug displays from index
+// New imports for modular components
+import { CameraManager } from '../camera/CameraManager';
+import { InputController } from '../input/InputController';
+import { MapInitializer } from '../world/MapInitializer';
+import { 
+    handleProjectileHitEnemy,
+    handleProjectileHitPlayer,
+    handlePlayerCollectXpOrb,
+    handleEnemyCollideEnemy
+} from '../eventHandlers/collisionHandlers';
+import { FloatingTextManager } from '../ui/FloatingTextManager';
+import { PauseMenuScene } from '../ui/PauseMenuScene'; // Import PauseMenuScene
 
 // Define the type for data passed from LobbyScene
 interface GameSceneData {
@@ -27,42 +36,12 @@ interface GameSceneData {
     worldSeed?: number;
     isMultiplayer?: boolean;
     serverUrl?: string;
+    characterId?: string;
     // ... any other data from initialServerData
 }
 
-// Define Wave Configurations
-// const WAVE_DEFINITIONS: WaveDefinition[] = [
-//     {
-//         waveNumber: 1,
-//         waveStartMessage: "Wave 1: Slime Time!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 10, spawnInterval: 1000, isRanged: false },
-//         ],
-//         timeToNextWave: 5000 // 5 seconds after wave clear
-//     },
-//     {
-//         waveNumber: 2,
-//         waveStartMessage: "Wave 2: Goblins Approach!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 10, spawnInterval: 1500, isRanged: false, spawnDelay: 0 },
-//             { enemyType: 'goblin', count: 5, spawnInterval: 500, isRanged: true, spawnDelay: 1000 },
-//         ],
-//         timeToNextWave: 5000
-//     },
-//     {
-//         waveNumber: 3,
-//         waveStartMessage: "Wave 3: The Horde!",
-//         enemyGroups: [
-//             { enemyType: 'slime', count: 20, spawnInterval: 800, isRanged: false },
-//             { enemyType: 'goblin', count: 10, spawnInterval: 1200, isRanged: true, spawnDelay: 2000 },
-//         ],
-//         // No timeToNextWave means this is the last wave in this definition set
-//     }
-// ];
-
 export class GameScene extends Phaser.Scene {
     player: PlayerSprite | undefined;
-    cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
     private enemies!: Phaser.Physics.Arcade.Group; // Enemy group
     private projectiles!: Phaser.Physics.Arcade.Group; // Projectile group
     private xpOrbs!: Phaser.Physics.Arcade.Group; // Group for XP orbs
@@ -70,16 +49,10 @@ export class GameScene extends Phaser.Scene {
     private progressionSystem!: ProgressionSystem; // Add progressionSystem property
     private particleSystem!: ParticleSystem; // Added particle system member
 
-    // Camera zoom properties
-    private currentZoom = 1;
-    private targetZoom = 1;
-    private minZoom = 0.5;
-    private maxZoom = 2;
-    private zoomFactor = 0.1;
-    private zoomDuration = 50; // Duration of zoom animation in ms
-    private currentZoomTween: Phaser.Tweens.Tween | null = null;
-    private keyZoomIn!: Phaser.Input.Keyboard.Key;
-    private keyZoomOut!: Phaser.Input.Keyboard.Key;
+    // New modular component instances
+    private cameraManager!: CameraManager;
+    private inputController!: InputController;
+    private mapInitializer!: MapInitializer;
 
     // Network related members
     private networkSystem: NetworkSystem | null = null;
@@ -87,14 +60,15 @@ export class GameScene extends Phaser.Scene {
     private serverUrl = 'ws://127.0.0.1:8080';
     private remotePlayers: Map<string, PlayerSprite> = new Map();
 
-    public static readonly CELL_WIDTH = 64;
-    public static readonly CELL_HEIGHT = 64;
+    private hitboxCollisionManager!: HitboxCollisionManager;
+    private buildings!: Phaser.Physics.Arcade.StaticGroup;
 
-    private hitboxCollisionManager!: HitboxCollisionManager; // ADDED
-    private buildings!: Phaser.Physics.Arcade.StaticGroup; // ADDED for static building colliders
-
-    private cursorHideTimer?: Phaser.Time.TimerEvent;
-    private readonly CURSOR_HIDE_DELAY = 200; // Time in ms to hide cursor after no movement
+    private enemyDebugDisplay!: EnemyDebugDisplay; // ADDED: Instance of EnemyDebugDisplay
+    private playerDebugDisplay!: PlayerDebugDisplay; // ADDED: Instance of PlayerDebugDisplay
+    private killCount = 0; // ADDED: Player's kill count
+    
+    // Pause handling
+    private isPaused: boolean = false;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -124,23 +98,28 @@ export class GameScene extends Phaser.Scene {
     }
 
     create(data: GameSceneData) {
-        // ADDED: Display the static map
-        this.add.image(0, 0, 'mega-map').setOrigin(0, 0).setDepth(-20); // Ensure it's behind everything
+        this.killCount = 0; // Explicitly reset kill count on scene creation
 
-        // ADDED: Get map dimensions from JSON (or hardcode if known fixed)
-        const mapHitboxData = this.cache.json.get('mapHitboxData');
-        const mapWidth = mapHitboxData?.mapWidth ?? 10000; // Default to 10000 if not in JSON
-        const mapHeight = mapHitboxData?.mapHeight ?? 10000;
+        // Initialize modular components
+        this.cameraManager = new CameraManager(this);
+        this.inputController = new InputController(this);
+        this.mapInitializer = new MapInitializer(this);
+
+        // Initialize map and buildings
+        const mapData = this.mapInitializer.initialize();
+        this.hitboxCollisionManager = mapData.hitboxCollisionManager;
+        this.buildings = mapData.buildings;
+        const mapWidth = mapData.mapWidth;
+        const mapHeight = mapData.mapHeight;
+
+        // Set camera background color
+        this.cameraManager.setBackgroundColor('#222222');
 
         // Create the dynamic XP orb texture
         this.createXpOrbTexture();
 
         // Instantiate ParticleSystem early
         this.particleSystem = new ParticleSystem(this); // Instantiated ParticleSystem
-
-        this.physics.world.setBounds(0, 0, mapWidth, mapHeight); // Use new map dimensions
-
-        this.cameras.main.setBackgroundColor('#222222');
 
         // Set up network system if in multiplayer mode
         if (this.isMultiplayer) {
@@ -150,7 +129,11 @@ export class GameScene extends Phaser.Scene {
         // Initialize player BEFORE setting up collision
         const playerX = data.initialPosition?.x ?? mapWidth / 2;
         const playerY = data.initialPosition?.y ?? mapHeight / 2;
-        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', this.particleSystem);
+        
+        // Debug character information
+        console.log(`GameScene: Creating player with character ID: ${data.characterId ?? '1'}`);
+        
+        this.player = new PlayerSprite(this, playerX, playerY, data.playerId ?? 'localPlayer', data.characterId ?? '1', this.particleSystem);
 
         // Configure player network mode if multiplayer
         if (this.isMultiplayer && this.networkSystem && this.player) {
@@ -175,27 +158,6 @@ export class GameScene extends Phaser.Scene {
             runChildUpdate: true // Ensure XpOrb's preUpdate is called
         });
 
-        // ADDED: Initialize HitboxCollisionManager and create building colliders
-        if (mapHitboxData?.objects) {
-            this.hitboxCollisionManager = new HitboxCollisionManager(mapHitboxData.objects);
-            this.buildings = this.physics.add.staticGroup();
-            for (const obj of this.hitboxCollisionManager.getAllObjects()) {
-                if (obj.category === 'building') {
-                    // Create a static physics body for each building
-                    // Adjust origin if necessary, but x,y from JSON are usually top-left
-                    const buildingCollider = this.buildings.create(obj.x + obj.width / 2, obj.y + obj.height / 2, undefined);
-                    buildingCollider.setSize(obj.width, obj.height);
-                    buildingCollider.setVisible(false); // The building is already part of the visual map
-                    buildingCollider.refreshBody();
-                }
-            }
-        } else {
-            console.error("GameScene: Map hitbox data not found or invalid. Cannot create collision manager or buildings.");
-            // Fallback or error state if map data is missing
-            this.hitboxCollisionManager = new HitboxCollisionManager([]); // Init with empty if no data
-            this.buildings = this.physics.add.staticGroup();
-        }
-
         // Setup Enemy Spawner
         if (this.player) {
             this.enemySpawner = new EnemySpawner(this, this.player, this.enemies, WAVE_DEFINITIONS, this.particleSystem); // Pass particleSystem
@@ -205,178 +167,207 @@ export class GameScene extends Phaser.Scene {
             this.progressionSystem = new ProgressionSystem(this, this.player);
         }
 
-        // ADDED: New collision with static buildings
+        // Set up collisions using the MapInitializer
         if (this.player) {
-            this.physics.add.collider(this.player, this.buildings);
+            this.mapInitializer.setupCollisions(this.player);
         }
-        this.physics.add.collider(this.enemies, this.buildings);
+        this.mapInitializer.setupCollisions(this.enemies);
 
         // Collision between player and enemies
         if (this.player) {
-            this.physics.add.overlap(this.projectiles, this.enemies, this.handleProjectileHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
-            this.physics.add.overlap(this.projectiles, this.player, this.handleProjectileHitPlayer as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+            this.physics.add.overlap(
+                this.projectiles, 
+                this.enemies, 
+                (obj1, obj2) => handleProjectileHitEnemy(this, obj1, obj2, this.player) as unknown as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, 
+                undefined, 
+                this
+            );
+            
+            this.physics.add.overlap(
+                this.projectiles, 
+                this.player, 
+                (obj1, obj2) => handleProjectileHitPlayer(this, obj1, obj2, this.player, this.enemies) as unknown as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, 
+                undefined, 
+                this
+            );
+            
             // Add collision for player and XP orbs
-            this.physics.add.overlap(this.player, this.xpOrbs, this.handlePlayerCollectXpOrb as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+            this.physics.add.overlap(
+                this.player, 
+                this.xpOrbs, 
+                (obj1, obj2) => handlePlayerCollectXpOrb(this, obj1, obj2) as unknown as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, 
+                undefined, 
+                this
+            );
         }
 
         // Collision between enemies themselves (to prevent clumping)
-        this.physics.add.collider(this.enemies, this.enemies);
+        this.physics.add.collider(
+            this.enemies, 
+            this.enemies, 
+            handleEnemyCollideEnemy as unknown as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, 
+            undefined, 
+            this
+        );
 
-        if (this.input.keyboard) {
-            this.cursors = this.input.keyboard.createCursorKeys();
-            
-            // Add zoom key bindings
-            this.keyZoomIn = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.PLUS);
-            this.keyZoomOut = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS);
+        // ADDED: Initialize EnemyDebugDisplay and PlayerDebugDisplay
+        this.enemyDebugDisplay = new EnemyDebugDisplay(this);
+        this.playerDebugDisplay = new PlayerDebugDisplay(this);
+
+        // Initialize camera with player as target
+        if (this.player) {
+            this.cameraManager.initialize(this.player, 0, 0, mapWidth, mapHeight);
         }
-
-        this.cameras.main.startFollow(this.player, true, 1, 1);
-        this.cameras.main.setBounds(0, 0, mapWidth, mapHeight); // Use new map dimensions
-        this.cameras.main.roundPixels = true; // For smoother, pixel-perfect camera movement
-        
-        // Set initial zoom
-        this.cameras.main.setZoom(this.currentZoom);
-
-        // Setup mousewheel zoom
-        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[], deltaX: number, deltaY: number, deltaZ: number) => {
-            if (deltaY > 0) {
-                this.zoomOut();
-            } else if (deltaY < 0) {
-                this.zoomIn();
-            }
-        });
 
         // Launch the HUD Scene
         this.scene.launch('HudScene');
         this.scene.bringToTop('HudScene');
+        
+        // Load the PauseMenuScene but keep it inactive until needed
+        if (!this.scene.get('PauseMenuScene')) {
+            this.scene.add('PauseMenuScene', PauseMenuScene, false);
+        }
 
-        // Listen for HUD ready event before starting wave system
-        this.game.events.once('hudReady', () => {
+        // Listen for HUD ready event before starting wave system and updating HUD
+        this.game.events.once(GameEvent.HUD_READY, () => {
             if (this.enemySpawner) {
-                this.enemySpawner.startWaveSystem(1); // Start with wave 1 NOW
+                this.enemySpawner.startWaveSystem(1); // Start with wave 1
+            }
+            
+            // Set initial HUD values after HUD is ready
+            if (this.player) {
+                this.game.events.emit(GameEvent.UPDATE_HUD, {
+                    hp: this.player.currentStats.hp,
+                    maxHp: this.player.currentStats.maxHp,
+                    currentXp: 0,
+                    nextLevelXp: 100,
+                    killCount: this.killCount
+                });
             }
         });
 
-        // Set initial HUD values
-        if (this.player) {
-            this.game.events.emit('updateHud', {
-                hp: this.player.currentStats.hp,
-                maxHp: this.player.currentStats.maxHp,
-                currentXp: 0,
-                nextLevelXp: 100
-            });
-        }
-
-        // Hide the cursor initially
-        this.game.canvas.style.cursor = 'none';
-        // Listen for mouse movement to show and then hide cursor
-        this.input.on('pointermove', this.handleMouseMoveForCursor, this);
-
         // Connect progression system events to HUD
-        this.events.on('xpUpdated', (data: { currentXP: number, currentLevel: number, xpToNextLevel: number }) => {
-            this.game.events.emit('updateHud', {
+        this.events.on(GameEvent.XP_UPDATED, (data: { currentXP: number, currentLevel: number, xpToNextLevel: number }) => {
+            this.game.events.emit(GameEvent.UPDATE_HUD, {
                 currentXp: data.currentXP,
                 nextLevelXp: data.xpToNextLevel,
                 level: data.currentLevel // Ensure level is passed to HUD
             });
         });
 
-        this.events.on('playerLevelUp', (data: { newLevel: number }) => {
+        this.events.on(GameEvent.PLAYER_LEVEL_UP, (data: { newLevel: number }) => {
             // This is handled by ProgressionSystem opening the upgrade UI
             // We could add a visual effect here if desired
             // Ensure HUD is updated with the new level if not already covered by xpUpdated
-             this.game.events.emit('updateHud', { level: data.newLevel });
+             this.game.events.emit(GameEvent.UPDATE_HUD, { level: data.newLevel });
         });
 
         // Event Listeners
-        this.events.on(EVENT_ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
-        this.events.on(EVENT_ENTITY_DIED, (payload: { entity: EntitySprite, killer?: EntitySprite | ProjectileSprite | string }) => {
+        this.events.on(GameEvent.ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
+        this.events.on(GameEvent.ENTITY_DIED, (payload: { entity: EntitySprite, killer?: EntitySprite | ProjectileSprite | string }) => {
             if (payload.entity instanceof EnemySprite && this.enemySpawner) {
                 this.enemySpawner.notifyEnemyDefeated(payload.entity as EnemySprite);
-                if (payload.killer instanceof ProjectileSprite &&
-                    this.player &&
-                    payload.killer.ownerId === this.player.entityId) {
-                    // Use currentStats or baseStats for xpValue, with a fallback
+
+                // Check if the player is the killer, either directly or via a projectile
+                let killedByPlayer = false;
+                if (this.player) {
+                    if (payload.killer instanceof ProjectileSprite && payload.killer.ownerId === this.player.entityId) {
+                        killedByPlayer = true;
+                    } else if (payload.killer === this.player) { // Direct kill by player (e.g., melee)
+                        killedByPlayer = true;
+                    } else if (typeof payload.killer === 'string' && payload.killer === this.player.entityId) {
+                        // Case where killer is an entityId string referring to the player
+                        killedByPlayer = true;
+                    }
+                }
+
+                if (killedByPlayer) {
                     const xpAmount = (payload.entity as EnemySprite).currentStats.xpValue ?? (payload.entity as EnemySprite).baseStats.xpValue ?? 10;
-                    // Instead of emitting 'enemyKilled' for XP, spawn orbs
                     this.spawnXpOrbs(payload.entity.x, payload.entity.y, xpAmount);
-                    // We might still want an 'enemyKilled' event for other purposes (e.g. quests, stats)
-                    // For now, focusing on XP orb change.
-                    // this.events.emit('enemyKilled', { amount: xpAmount, enemy: payload.entity });
+                    
+                    // ADDED: Increment kill count and update HUD
+                    this.killCount++;
+                    this.game.events.emit(GameEvent.UPDATE_HUD, { killCount: this.killCount });
                 }
             } else if (payload.entity instanceof PlayerSprite && payload.entity === this.player) {
                 const wavesSurvived = this.enemySpawner ? this.enemySpawner.getCurrentWaveNumber() - 1 : 0; 
                 this.scene.stop('HudScene'); 
                 this.scene.stop(this.scene.key); 
-                this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived });
+                this.scene.start('GameOverScene', { wavesSurvived: wavesSurvived, killCount: this.killCount }); // Pass killCount
             }
         });
 
-        this.events.on(EVENT_ENTITY_TAKE_DAMAGE, (payload: { target: EntitySprite, damage: number, newHp: number, source?: EntitySprite | ProjectileSprite | string }) => {
+        this.events.on(GameEvent.ENTITY_TAKE_DAMAGE, (payload: { target: EntitySprite, damage: number, newHp: number, source?: EntitySprite | ProjectileSprite | string }) => {
             if (payload.target instanceof PlayerSprite && this.player === payload.target) {
-                this.game.events.emit('updateHud', {
+                this.game.events.emit(GameEvent.UPDATE_HUD, {
                     hp: payload.newHp,
                     maxHp: this.player.currentStats.maxHp
                 });
             }
         });
-        this.events.on(EVENT_PROJECTILE_SPAWNED, (payload: { projectile: ProjectileSprite, ownerId: string }) => {
+        this.events.on(GameEvent.PROJECTILE_SPAWNED, (payload: { projectile: ProjectileSprite, ownerId: string }) => {
         });
 
         // Listen for XP orb collection to pass XP to ProgressionSystem
-        this.events.on('xpOrbCollected', (data: { amount: number }) => {
+        this.events.on(GameEvent.XP_ORB_COLLECTED, (data: { amount: number }) => {
             if (this.progressionSystem) {
                 this.progressionSystem.addXp(data.amount);
             }
         });
 
         // Listen to EnemySpawner events for logging (and later UI)
-        this.events.on('waveStart', (data: { waveNumber: number, totalEnemies: number }) => {
+        this.events.on(GameEvent.WAVE_START, (data: { waveNumber: number, totalEnemies: number }) => {
             // Emit a global event for the HUD
-            this.game.events.emit('updateWaveHud', {
+            this.game.events.emit(GameEvent.UPDATE_WAVE_HUD, {
                 waveNumber: data.waveNumber,
                 enemiesRemaining: data.totalEnemies, // Initially, all enemies are remaining
                 totalEnemiesInWave: data.totalEnemies
             });
             // Emit the new event specifically for the wave started message
-            this.game.events.emit('newWaveStartedHud', { waveNumber: data.waveNumber });
+            this.game.events.emit(GameEvent.NEW_WAVE_STARTED_HUD, { waveNumber: data.waveNumber });
         });
-        this.events.on('enemyDefeatedInWave', (data: { waveNumber: number, enemiesRemaining: number, totalSpawnedThisWave: number, totalToSpawnThisWave: number }) => {
+        this.events.on(GameEvent.ENEMY_DEFEATED_IN_WAVE, (data: { waveNumber: number, enemiesRemaining: number, totalSpawnedThisWave: number, totalToSpawnThisWave: number }) => {
             // Emit a global event for the HUD
-            this.game.events.emit('updateWaveHud', {
+            this.game.events.emit(GameEvent.UPDATE_WAVE_HUD, {
                 waveNumber: data.waveNumber,
                 enemiesRemaining: data.enemiesRemaining,
                 totalEnemiesInWave: data.totalToSpawnThisWave
             });
         });
-        this.events.on('waveClear', (data: { waveNumber: number }) => {
+        this.events.on(GameEvent.WAVE_CLEAR, (data: { waveNumber: number }) => {
             // We no longer need to show upgrades on wave clear
             // as progression is now XP-based
             // Just update the HUD
-            this.game.events.emit('waveClearHud', data);
+            this.game.events.emit(GameEvent.WAVE_CLEAR_HUD, data);
         });
-        this.events.on('allWavesCleared', () => {
+        this.events.on(GameEvent.ALL_WAVES_CLEARED, () => {
             // Optionally, tell HUD all waves are cleared
-            this.game.events.emit('allWavesClearedHud');
+            this.game.events.emit(GameEvent.ALL_WAVES_CLEARED_HUD);
         });
+        
+        // Set up pause-related event listeners
+        this.game.events.on(GameEvent.RESUME_GAME, this.resumeGame, this);
+        this.game.events.on(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
     }
 
     private handleEntityShoot(payload: {
         shooter: EntitySprite,
         projectileType: string,
         direction: Phaser.Math.Vector2,
-        targetPosition?: Phaser.Math.Vector2
+        targetPosition?: Phaser.Math.Vector2,
+        damage: number,
+        projectileSpeed: number,
+        lifespan: number,
+        projectileScale?: number,
+        isCritical: boolean;
     }): void {
-        const { shooter, projectileType, direction } = payload; 
-
-        const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
+        const { shooter, projectileType, direction, damage, projectileSpeed, lifespan, isCritical } = payload;
 
         let spawnOffsetMagnitude: number;
-        let projectileScale: number | undefined = undefined;
+        const projectileScale: number | undefined = payload.projectileScale;
 
         if (shooter instanceof PlayerSprite) {
             spawnOffsetMagnitude = 37;
-            projectileScale = shooter.getProjectileScale();
         } else if (shooter instanceof EnemySprite) {
             const sWidth = typeof shooter.width === 'number' && Number.isFinite(shooter.width) ? shooter.width : 32;
             const sHeight = typeof shooter.height === 'number' && Number.isFinite(shooter.height) ? shooter.height : 32;
@@ -387,21 +378,20 @@ export class GameScene extends Phaser.Scene {
             spawnOffsetMagnitude = (Math.max(sWidth, sHeight) / 2) + 10;
         }
 
-        // Use shooter's currentStats for projectile properties, with fallbacks from EntitySprite defaults if needed
-        const damage = shooter.currentStats.projectileDamage ?? 10;
-        const speed = shooter.currentStats.projectileSpeed ?? 300;
+        const pType: ProjectileType = ProjectileType[projectileType as keyof typeof ProjectileType] || ProjectileType.BULLET;
 
         const projectile = new ProjectileSprite(
             this,
             shooter.x + direction.x * spawnOffsetMagnitude,
-            shooter.y + direction.y * spawnOffsetMagnitude, 
+            shooter.y + direction.y * spawnOffsetMagnitude,
             pType,
             shooter.entityId,
-            damage, 
-            speed,  
-            shooter.projectileLifespan, 
-            projectileScale, 
-            this.particleSystem 
+            damage,
+            projectileSpeed,
+            lifespan,
+            projectileScale,
+            this.particleSystem,
+            isCritical
         );
 
         this.projectiles.add(projectile);
@@ -409,162 +399,36 @@ export class GameScene extends Phaser.Scene {
             projectile.body.setVelocity(direction.x * projectile.speed, direction.y * projectile.speed);
         }
 
-        this.events.emit(EVENT_PROJECTILE_SPAWNED, { projectile, ownerId: shooter.entityId });
-    }
-
-    private handleProjectileHitEnemy(obj1: Phaser.Types.Physics.Arcade.GameObjectWithBody, obj2: Phaser.Types.Physics.Arcade.GameObjectWithBody): void {
-        const projectile = obj1 as ProjectileSprite;
-        const enemy = obj2 as EnemySprite;
-
-        if (!projectile.active || !enemy.active || !projectile.ownerId) return;
-        if (this.player && projectile.ownerId === this.player.entityId) {
-            this.events.emit(EVENT_PROJECTILE_HIT_ENTITY, { projectile, target: enemy });
-            enemy.takeDamage(projectile.damageAmount, projectile);
-            projectile.impact();
-        }
-    }
-
-    private handleProjectileHitPlayer(obj1: Phaser.Types.Physics.Arcade.GameObjectWithBody, obj2: Phaser.Types.Physics.Arcade.GameObjectWithBody): void {
-        let projectile: ProjectileSprite | undefined;
-        let player: PlayerSprite | undefined;
-
-        if (obj1 instanceof ProjectileSprite && obj2 instanceof PlayerSprite) {
-            projectile = obj1;
-            player = obj2;
-        } else if (obj2 instanceof ProjectileSprite && obj1 instanceof PlayerSprite) {
-            projectile = obj2;
-            player = obj1;
-        } else {
-            // Not a collision between a projectile and a player we are interested in
-            return;
-        }
-
-        if (!projectile || !player || !projectile.active || !player.active || !projectile.ownerId) return;
-        if (projectile.ownerId === player.entityId) return; // Player can't shoot self
-
-        // If projectile owner is one of the enemies, it can damage player
-        let isEnemyProjectile = false;
-        for (const enemyChild of this.enemies.getChildren()) {
-            const enemyEntity = enemyChild as EntitySprite; // Cast to access entityId
-            if (enemyEntity.entityId === projectile.ownerId) {
-                isEnemyProjectile = true;
-                break;
-            }
-        }
-
-        if (isEnemyProjectile) {
-            this.events.emit(EVENT_PROJECTILE_HIT_ENTITY, { projectile, target: player });
-            player.takeDamage(projectile.damageAmount, projectile);
-            projectile.impact();
-        }
-    }
-
-    private handlePlayerCollectXpOrb(
-        playerObject: Phaser.Types.Physics.Arcade.GameObjectWithBody,
-        orbObject: Phaser.Types.Physics.Arcade.GameObjectWithBody
-    ): void {
-        const player = playerObject as PlayerSprite; 
-        const orb = orbObject as XpOrb; // Cast to XpOrb
-
-        if (!orb.active || !orb.body || !this.player) return; // Orb already collected, no body, or player missing
-
-        const xpValue = orb.xpValue; // Access directly from XpOrb property
-
-        if (typeof xpValue === 'number' && xpValue > 0) { // Only process if there is XP to gain
-            this.events.emit('xpOrbCollected', { amount: xpValue });
-
-            // Display floating XP text
-            this.showFloatingText(`+${xpValue} XP`, this.player.x, this.player.y - this.player.displayHeight / 2, '#FFD700'); // Gold color for XP
-
-            if (this.particleSystem) {
-                // this.particleSystem.playXpOrbCollect(orb.x, orb.y); // TODO: Implement in ParticleSystem
-            }
-            orb.destroy();
-        } else {
-            if (xpValue === 0) {
-                // Silently destroy 0-value orbs if they somehow get created and collected
-                orb.destroy();
-            } else {
-                console.warn('XP Orb collected without xpValue data or invalid data.');
-                orb.destroy(); // Still remove it
-            }
-        }
-    }
-
-    private showFloatingText(text: string, x: number, y: number, color: string, fontSize = '16px'): void {
-        const randomXOffset = Phaser.Math.Between(-15, 15);
-        const textObject = this.add.text(x + randomXOffset, y, text, {
-            fontFamily: 'Arial', // Using a pixel-art friendly font if available
-            fontSize: fontSize,
-            color: color,
-            stroke: '#000000',
-            strokeThickness: 3
-        });
-        textObject.setOrigin(0.5, 1); // Origin at bottom-center for upward float
-        textObject.setDepth(1000); // Ensure it's above other game elements
-
-        this.tweens.add({
-            targets: textObject,
-            y: y - 50, // Float upwards by 50 pixels
-            alpha: 0,  // Fade out
-            duration: 1200, // Duration of 1.2 seconds
-            ease: 'Power1',
-            onComplete: () => {
-                textObject.destroy();
-            }
-        });
-    }
-
-    private zoomIn(): void {
-        if (this.targetZoom < this.maxZoom) {
-            this.targetZoom = Math.min(this.maxZoom, this.targetZoom + this.zoomFactor);
-            this.smoothZoom(this.targetZoom);
-        }
-    }
-
-    private zoomOut(): void {
-        if (this.targetZoom > this.minZoom) {
-            this.targetZoom = Math.max(this.minZoom, this.targetZoom - this.zoomFactor);
-            this.smoothZoom(this.targetZoom);
-        }
-    }
-
-    private smoothZoom(targetZoom: number): void {
-        // Stop any existing zoom tween
-        if (this.currentZoomTween) {
-            this.currentZoomTween.stop();
-        }
-
-        // Create a new tween to smoothly transition to the target zoom
-        this.currentZoomTween = this.tweens.add({
-            targets: this.cameras.main,
-            zoom: targetZoom,
-            duration: this.zoomDuration,
-            ease: 'Sine.easeInOut',
-            onUpdate: () => {
-                this.currentZoom = this.cameras.main.zoom;
-            },
-            onComplete: () => {
-                this.currentZoom = targetZoom;
-                this.currentZoomTween = null;
-            }
-        });
+        this.events.emit(GameEvent.PROJECTILE_SPAWNED, { projectile, ownerId: shooter.entityId });
     }
 
     update(time: number, delta: number) {
-        if (!this.player || !this.cursors || !this.player.body) {
+        if (!this.player || !this.inputController.cursors || !this.player.body) {
             return;
         }
+        
+        // Check for pause key press using InputController
+        if (this.inputController.isPauseTogglePressed()) {
+            this.togglePause();
+            return;
+        }
+        
+        // Skip updates if game is paused
+        if (this.isPaused) return;
 
-        // Handle keyboard zoom controls
-        if (Phaser.Input.Keyboard.JustDown(this.keyZoomIn)) {
-            this.zoomIn();
-        } else if (Phaser.Input.Keyboard.JustDown(this.keyZoomOut)) {
-            this.zoomOut();
+        // Update camera manager
+        this.cameraManager.update();
+
+        // Check for enemy debug toggle from input controller
+        if (this.inputController.isDebugTogglePressed()) {
+            this.enemyDebugDisplay.toggleVisibility();
+            if (this.player) {
+                this.playerDebugDisplay.toggleVisibility();
+            }
         }
 
         // Update player movement - just handles input and movement
-        this.player.updateMovement(this.cursors);
+        this.player.updateMovement(this.inputController.cursors);
 
         // Give the player the current list of enemies for auto-targeting
         if (this.enemies) {
@@ -574,6 +438,12 @@ export class GameScene extends Phaser.Scene {
         // Update enemy spawner
         if (this.enemySpawner) {
             this.enemySpawner.update(time, delta);
+        }
+
+        // MODIFIED: Update debug displays
+        this.enemyDebugDisplay.update(this.enemies);
+        if (this.player) {
+            this.playerDebugDisplay.update([this.player]);
         }
 
         // Y-sorting for player
@@ -593,49 +463,102 @@ export class GameScene extends Phaser.Scene {
         for (const remotePlayer of this.remotePlayers.values()) {
             remotePlayer.setDepth(remotePlayer.y + remotePlayer.displayHeight / 2);
         }
-        
-        // Send enemy positions to HUD for indicators
-        this.updateEnemyIndicators();
     }
-
-    // Add this new method to update enemy indicators
-    private updateEnemyIndicators(): void {
-        // Only update if enemies exist and the HUD scene is active
-        if (!this.enemies || !this.enemies.getLength() || !this.scene.isActive('HudScene')) {
-            return;
+    
+    /**
+     * Toggle game pause state
+     */
+    private togglePause(): void {
+        if (this.isPaused) {
+            this.resumeGame();
+        } else {
+            this.pauseGame();
+        }
+    }
+    
+    /**
+     * Pause the game and show pause menu
+     */
+    private pauseGame(): void {
+        if (this.isPaused) return;
+        
+        this.isPaused = true;
+        
+        // Pause physics if initialized
+        if (this.physics) {
+            this.physics.pause();
         }
         
-        const cam = this.cameras.main;
-        const enemyData = [];
-        
-        // Collect data about all enemies
-        for (const enemy of this.enemies.getChildren()) {
-            if (enemy instanceof Phaser.GameObjects.Sprite && enemy.active) {
-                // Cast to EnemySprite to access entityId
-                const enemySprite = enemy as EnemySprite;
-                enemyData.push({
-                    id: enemySprite.entityId || `enemy_${enemy.x}_${enemy.y}`,
-                    worldX: enemy.x,
-                    worldY: enemy.y
-                });
-            }
+        // Pause any tweens if initialized
+        if (this.tweens) {
+            this.tweens.pauseAll();
         }
         
-        // Emit event to update HUD indicators with enemy and camera information
-        this.game.events.emit('updateEnemyIndicators', {
-            enemies: enemyData,
-            cameraX: cam.worldView.x,
-            cameraY: cam.worldView.y,
-            cameraWidth: cam.width,
-            cameraHeight: cam.height
-        });
+        // Launch the pause menu scene
+        this.scene.launch('PauseMenuScene');
+        this.scene.bringToTop('PauseMenuScene');
+        
+        // Emit pause event for any systems that need to know
+        this.game.events.emit(GameEvent.PAUSE_GAME);
+    }
+    
+    /**
+     * Resume the game from pause state
+     */
+    private resumeGame(): void {
+        if (!this.isPaused) return;
+        
+        this.isPaused = false;
+        
+        // Resume physics if initialized
+        if (this.physics) {
+            this.physics.resume();
+        }
+        
+        // Resume any tweens if initialized
+        if (this.tweens) {
+            this.tweens.resumeAll();
+        }
+        
+        // Stop the pause menu scene instead of sleeping it
+        if (this.scene.isActive('PauseMenuScene')) {
+            this.scene.stop('PauseMenuScene');
+        }
+        
+        // Emit resume event for any systems that need to know
+        this.game.events.emit(GameEvent.RESUME_GAME);
+    }
+    
+    /**
+     * Quit the current game and return to main menu
+     */
+    private quitToMenu(): void {
+        // Clean up current game state
+        this.scene.stop('PauseMenuScene');
+        this.scene.stop('HudScene');
+        
+        // Return to main menu scene
+        this.scene.start('MainMenuScene');
     }
 
     // Add shutdown method for cleanup
     shutdown() {
+        // Clean up modular components
+        if (this.cameraManager) {
+            this.cameraManager.destroy();
+        }
+        
+        if (this.inputController) {
+            this.inputController.destroy();
+        }
+
         if (this.particleSystem) {
             this.particleSystem.destroy();
         }
+
+        // ADDED: Destroy enemy debug display and player debug display
+        this.enemyDebugDisplay.destroy();
+        this.playerDebugDisplay.destroy();
 
         // Clean up network connections
         if (this.networkSystem) {
@@ -649,21 +572,32 @@ export class GameScene extends Phaser.Scene {
         }
         this.remotePlayers.clear();
 
-        // Potentially destroy other systems or clear event listeners if not handled by Phaser automatically
-        this.events.off(EVENT_ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this);
-        // ... remove other listeners added with this.events.on ...
-
+        // Remove listeners with specific handlers/context
+        this.events.off(GameEvent.ENTITY_SHOOT_PROJECTILE, this.handleEntityShoot, this); 
+        this.game.events.off(GameEvent.RESUME_GAME, this.resumeGame, this);
+        this.game.events.off(GameEvent.QUIT_TO_MENU, this.quitToMenu, this);
+        
+        // Remove all listeners for events added with inline functions on this.events
+        this.events.off(GameEvent.XP_UPDATED);
+        this.events.off(GameEvent.PLAYER_LEVEL_UP);
+        this.events.off(GameEvent.ENTITY_DIED);
+        this.events.off(GameEvent.ENTITY_TAKE_DAMAGE);
+        this.events.off(GameEvent.PROJECTILE_SPAWNED);
+        this.events.off(GameEvent.XP_ORB_COLLECTED);
+        this.events.off(GameEvent.WAVE_START);
+        this.events.off(GameEvent.ENEMY_DEFEATED_IN_WAVE);
+        this.events.off(GameEvent.WAVE_CLEAR);
+        this.events.off(GameEvent.ALL_WAVES_CLEARED);
+        // Note: this.game.events listeners (HUD_READY, RESUME_GAME, QUIT_TO_MENU) are handled separately or are self-removing (once).
+        
         // If HUD scene is managed here, ensure it's stopped
         if (this.scene.isActive('HudScene')) {
             this.scene.stop('HudScene');
         }
-
-        // Restore the cursor and clean up
-        this.game.canvas.style.cursor = 'default';
-        this.input.off('pointermove', this.handleMouseMoveForCursor, this);
-        if (this.cursorHideTimer) {
-            this.cursorHideTimer.remove(false);
-            this.cursorHideTimer = undefined;
+        
+        // Make sure pause menu is stopped
+        if (this.scene.isActive('PauseMenuScene')) {
+            this.scene.stop('PauseMenuScene');
         }
     }
 
@@ -674,18 +608,18 @@ export class GameScene extends Phaser.Scene {
         this.networkSystem = new NetworkSystem();
 
         // Set up network event listeners
-        this.networkSystem.on('connected', () => {
+        this.networkSystem.on(GameEvent.NETWORK_CONNECTED, () => {
             console.log('Successfully connected to game server!');
 
             // Send connect message to the server
             this.networkSystem?.sendConnectMessage(`Player_${Math.floor(Math.random() * 1000)}`);
         });
 
-        this.networkSystem.on('messageReceived', (message: ServerMessage) => {
+        this.networkSystem.on(GameEvent.NETWORK_MESSAGE_RECEIVED, (message: ServerMessage) => {
             this.handleNetworkMessage(message);
         });
 
-        this.networkSystem.on('disconnected', (event: { code: number, reason: string }) => {
+        this.networkSystem.on(GameEvent.NETWORK_DISCONNECTED, (event: { code: number, reason: string }) => {
             console.log(`Disconnected from server. Code: ${event.code}, Reason: ${event.reason}`);
             // Optionally handle fallback to singleplayer
         });
@@ -724,7 +658,14 @@ export class GameScene extends Phaser.Scene {
 
         if (!remotePlayer) {
             // Create new remote player sprite
-            remotePlayer = new PlayerSprite(this, position.x, position.y, id, this.particleSystem);
+            remotePlayer = new PlayerSprite(
+                this, 
+                position.x, 
+                position.y, 
+                id, 
+                position.characterId || '1', 
+                this.particleSystem
+            );
 
             // Mark as network controlled
             if (this.networkSystem) {
@@ -738,30 +679,13 @@ export class GameScene extends Phaser.Scene {
             this.remotePlayers.set(id, remotePlayer);
 
             // Add any necessary colliders
-            if (this.buildings) { // ADDED collision with static buildings for remote players
+            if (this.buildings) { // Collision with static buildings for remote players
                 this.physics.add.collider(remotePlayer, this.buildings);
             }
         }
 
         // Update the remote player's position
         remotePlayer.updateFromNetwork(position.x, position.y);
-    }
-
-    private handleMouseMoveForCursor(): void {
-        // Show the cursor
-        this.game.canvas.style.cursor = 'default';
-
-        // Clear any existing timer
-        if (this.cursorHideTimer) {
-            this.cursorHideTimer.remove(false);
-        }
-
-        // Set a timer to hide the cursor again
-        this.cursorHideTimer = this.time.delayedCall(this.CURSOR_HIDE_DELAY, () => {
-            if (this.scene.isActive()) { // Only hide if the scene is still active
-                this.game.canvas.style.cursor = 'none';
-            }
-        }, [], this);
     }
 
     private spawnXpOrbs(x: number, y: number, totalXpValue: number): void {
@@ -812,7 +736,7 @@ export class GameScene extends Phaser.Scene {
 
     private createXpOrbTexture(): void {
         const key = 'xp_orb_dynamic';
-        const size = 32; // Texture size (diameter of the orb)
+        const size = 20; // Texture size (diameter of the orb)
         const glowPadding = 4; // Extra padding for the glow effect
         const canvasSize = size + glowPadding * 2; // Canvas needs to be larger to accommodate glow
 

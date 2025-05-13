@@ -133,5 +133,104 @@
         "color": "0x228B22", 
         "impactParticleEffect": "glassShatter",
         "impactSoundKey": "sfx_bottle_shatter"
+    },
+    {
+        "type": "PAPER_PROJECTILE",
+        "textureName": "projectile_paper_texture",
+        "width": 15,
+        "height": 10,
+        "color": "0xffffff",
+        "impactParticleEffect": "paperImpact",
+        "impactSoundKey": "sfx_paper_hit"
+    },
+    {
+        "type": "GHOST_COIN",
+        "textureName": "projectile_ghostcoin_texture",
+        "width": 12,
+        "height": 12,
+        "color": "0xaaaaff",
+        "impactParticleEffect": "coinSparkle",
+        "impactSoundKey": "sfx_coin_hit"
+    },
+    {
+        "type": "SOUND_WAVE",
+        "textureName": "projectile_soundwave_alt_texture",
+        "width": 30,
+        "height": 10,
+        "color": "0xccddff",
+        "impactParticleEffect": "soundwaveImpact",
+        "impactSoundKey": "sfx_soundwave_hit_alt"
+    },
+    {
+        "type": "MUD_PATCH",
+        "textureName": "projectile_mudpatch_texture",
+        "width": 25,
+        "height": 15,
+        "color": "0x8B4513",
+        "impactParticleEffect": "mudSplat",
+        "impactSoundKey": "sfx_mud_splat"
+    },
+    {
+        "type": "CAN_SHARD",
+        "textureName": "projectile_canshard_texture",
+        "width": 7,
+        "height": 7,
+        "color": "0xcccccc",
+        "impactParticleEffect": "metalSpark",
+        "impactSoundKey": "sfx_can_hit_light"
+    },
+    {
+        "type": "TRASH_BALL",
+        "textureName": "projectile_trashball_texture",
+        "width": 18,
+        "height": 18,
+        "color": "0x654321",
+        "impactParticleEffect": "trashImpact",
+        "impactSoundKey": "sfx_trash_hit"
+    },
+    {
+        "type": "DIGITAL_GLYPH",
+        "textureName": "projectile_digitalglyph_texture",
+        "width": 16,
+        "height": 16,
+        "color": "0x00ff00",
+        "impactParticleEffect": "digitalImpact",
+        "impactSoundKey": "sfx_digital_impact"
+    },
+    {
+        "type": "CRYPTO_COIN",
+        "textureName": "projectile_cryptocoin_texture",
+        "width": 12,
+        "height": 12,
+        "color": "0xffd700",
+        "impactParticleEffect": "coinSparkle",
+        "impactSoundKey": "sfx_crypto_coin_hit"
+    },
+    {
+        "type": "ENERGY_BLAST",
+        "textureName": "projectile_energyblast_texture",
+        "width": 20,
+        "height": 10,
+        "color": "0x00ffff",
+        "impactParticleEffect": "energyBlastImpact",
+        "impactSoundKey": "sfx_energy_blast_hit"
+    },
+    {
+        "type": "PAPER_SHURIKEN",
+        "textureName": "projectile_papershuriken_texture",
+        "width": 14,
+        "height": 14,
+        "color": "0xeeeeee",
+        "impactParticleEffect": "paperImpact",
+        "impactSoundKey": "sfx_paper_throw_sharp"
+    },
+    {
+        "type": "AIR_GUST",
+        "textureName": "projectile_airgust_texture",
+        "width": 22,
+        "height": 8,
+        "color": "0xaaddff",
+        "impactParticleEffect": "windPuff",
+        "impactSoundKey": "sfx_wind_gust_hit"
     }
 ] 

@@ -24,7 +24,6 @@ export class HitboxCollisionManager {
         this.objects = objects;
         // Define which categories are considered solid
         this.solidCategories = new Set(['building']); 
-        console.log(`HitboxCollisionManager initialized with ${this.objects.length} objects.`);
     }
 
     /**

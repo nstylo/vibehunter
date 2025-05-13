@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { ParticleSystem } from '../systems/ParticleSystem';
 import PROJECTILE_DEFINITIONS from '../definitions/projectiles.json'; // Import projectile definitions
+import { DataManager } from '../systems/DataManager'; // ADDED: Import DataManager
+import type { IProjectileDefinition } from '../interfaces/IProjectileDefinition'; // Import the interface
 
 export enum ProjectileType {
   BULLET = 'BULLET',
@@ -18,21 +20,20 @@ export enum ProjectileType {
   HOSE_SPRAY = 'HOSE_SPRAY',
   TRANQUILIZER_DART = 'TRANQUILIZER_DART',
   SNARE = 'SNARE',
-  BOTTLE = 'BOTTLE'
+  BOTTLE = 'BOTTLE',
+  // ADDED: Ensure all types from projectiles.json are here
+  PAPER_PROJECTILE = 'PAPER_PROJECTILE',
+  GHOST_COIN = 'GHOST_COIN',
+  SOUND_WAVE = 'SOUND_WAVE',
+  MUD_PATCH = 'MUD_PATCH',
+  CAN_SHARD = 'CAN_SHARD',
+  TRASH_BALL = 'TRASH_BALL',
+  DIGITAL_GLYPH = 'DIGITAL_GLYPH',
+  CRYPTO_COIN = 'CRYPTO_COIN',
+  ENERGY_BLAST = 'ENERGY_BLAST',
+  PAPER_SHURIKEN = 'PAPER_SHURIKEN',
+  AIR_GUST = 'AIR_GUST'
 }
-
-interface ProjectileDefinition {
-    type: string;
-    textureName: string;
-    width: number;
-    height: number;
-    color: string; // Hex string like "0xffffff"
-    impactParticleEffect: string; // Retained for potential future use, not directly driving ParticleSystem logic now
-    impactSoundKey: string;
-}
-
-// Texture key prefix for projectiles
-const PROJECTILE_TEXTURE_KEY_PREFIX = 'projectile_texture_';
 
 // We will extend Phaser.Physics.Arcade.Sprite directly
 export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
@@ -40,8 +41,12 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
   public lifeMs: number;
   public damageAmount: number;
   public speed: number; // Speed of the projectile
+  public isCritical: boolean; // Added: Tracks if the hit is critical
+  public piercing: boolean; // ADDED: Can this projectile pierce?
+  public maxPierceCount: number; // ADDED: How many times can it pierce?
+  public currentPierceCount: number; // ADDED: How many times has it pierced?
 
-  private projectileDef: ProjectileDefinition | undefined;
+  private projectileDef: IProjectileDefinition | undefined;
   private particleSystem?: ParticleSystem;
   private projectileTypeEnum: ProjectileType; // Store the enum for ParticleSystem
 
@@ -55,10 +60,11 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     speed: number,
     lifeMs: number,
     scaleFactor?: number, // Renamed from scale to scaleFactor for clarity
-    particleSystem?: ParticleSystem
+    particleSystem?: ParticleSystem,
+    isCritical = false // Added isCritical parameter
   ) {
     const typeStr = ProjectileType[projectileType];
-    const definition = PROJECTILE_DEFINITIONS.find(def => def.type === typeStr) as ProjectileDefinition | undefined;
+    const definition = DataManager.getInstance().getProjectileDefinition(typeStr);
 
     if (!definition) {
         console.error(`ProjectileSprite: No definition found for type: ${typeStr}. Using fallback.`);
@@ -67,12 +73,18 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
         ProjectileSprite.generateFallbackTexture(scene, fallbackTextureKey);
         super(scene, x, y, fallbackTextureKey);
         this.projectileDef = undefined; // Explicitly set to undefined
+        this.piercing = false; // ADDED: Default piercing
+        this.maxPierceCount = 1; // ADDED: Default max pierce
+        this.currentPierceCount = 0; // ADDED: Default current pierce
     } else {
-        if (!scene.textures.exists(definition.textureName)) {
+        if (!scene.textures.exists(definition.spriteKey)) {
             ProjectileSprite.generateProjectileTextureFromDef(scene, definition);
         }
-        super(scene, x, y, definition.textureName);
+        super(scene, x, y, definition.spriteKey);
         this.projectileDef = definition;
+        this.piercing = definition.piercing ?? false; // ADDED: Read from definition or default
+        this.maxPierceCount = this.piercing ? (definition.maxPierceCount ?? 1) : 1; // ADDED: Read or default (1 if not piercing)
+        this.currentPierceCount = 0; // ADDED: Initialize pierce count
     }
 
     this.ownerId = ownerId;
@@ -81,6 +93,7 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     this.lifeMs = lifeMs;
     this.particleSystem = particleSystem;
     this.projectileTypeEnum = projectileType;
+    this.isCritical = isCritical; // Store the critical status
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -94,32 +107,32 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
     }
     
     // Apply body size based on definition (if available) and scale
-    const bodyWidth = this.projectileDef ? this.projectileDef.width : 8; // Default if no def
-    const bodyHeight = this.projectileDef ? this.projectileDef.height : 8; // Default if no def
+    const bodyWidth = this.projectileDef?.hitboxWidth ?? this.projectileDef?.width ?? 8; // Use hitboxWidth first, then width
+    const bodyHeight = this.projectileDef?.hitboxHeight ?? this.projectileDef?.height ?? 8; // Use hitboxHeight first, then height
     
     if (this.body instanceof Phaser.Physics.Arcade.Body) {
         // For circular projectiles, a common pattern is to use half the width (or min(width,height)) as radius
-        // Assuming bullet and fireball are roughly circular
-        if (this.projectileDef && (this.projectileDef.type === 'BULLET' || this.projectileDef.type === 'FIREBALL')) {
-            this.body.setCircle((bodyWidth / 2) * this.scaleX);
-        } else {
+        // Assuming bullet and fireball are roughly circular (update if needed based on new defs)
+        // if (this.projectileDef && (this.projectileDef.key === 'BULLET' || this.projectileDef.key === 'FIREBALL')) { // Check key
+        //     this.body.setCircle((bodyWidth / 2) * this.scaleX);
+        // } else {
             // Default rectangular body, adjusted by scale
             this.body.setSize(bodyWidth * this.scaleX, bodyHeight * this.scaleY);
-        }
+        // }
     }
   }
 
   // Generate texture based on definition
-  static generateProjectileTextureFromDef(scene: Phaser.Scene, definition: ProjectileDefinition): void {
+  static generateProjectileTextureFromDef(scene: Phaser.Scene, definition: IProjectileDefinition): void {
     const graphics = scene.add.graphics();
-    const color = Number.parseInt(definition.color, 16); // Use Number.parseInt
-    const { width, height, type } = definition;
+    const color = definition.tint ?? 0xffffff; // Use tint or default white
+    const { width, height, key } = definition; // Use key
 
     // Common setup
     // Reset fillStyle before each new projectile type drawing if not explicitly set
 
     // Draw shapes based on projectile type
-    switch (type) {
+    switch (key) {
       case ProjectileType.BULLET: {
         graphics.fillStyle(color, 1);
         // Use fillEllipse to create a pointed oval shape, avoiding quadraticCurveTo
@@ -376,7 +389,7 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
       }
     }
     
-    graphics.generateTexture(definition.textureName, width, height);
+    graphics.generateTexture(definition.spriteKey, width, height);
     graphics.destroy();
   }
 
@@ -394,6 +407,8 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
 
     this.lifeMs -= delta;
     if (this.lifeMs <= 0) {
+      // Make sure impact effects play even if lifetime expires
+      this.handleImpactEffects(); 
       this.setActive(false);
       this.setVisible(false);
       this.destroy();
@@ -403,19 +418,37 @@ export default class ProjectileSprite extends Phaser.Physics.Arcade.Sprite {
   public impact(): void {
     if (!this.active) return;
 
-    this.setActive(false);
-    this.setVisible(false);
-    
-    if (this.particleSystem) { // No need to check this.projectileDef for this call
-      this.particleSystem.playProjectileImpact(this.projectileTypeEnum, this.x, this.y, this.scaleX);
+    // Always handle visual/audio effects on any impact
+    this.handleImpactEffects(); 
+
+    // Destroy projectile immediately if not piercing
+    if (!this.piercing) {
+        this.setActive(false);
+        this.setVisible(false);
+        this.destroy();
+        return; // Exit early
     }
-    
-    // TODO: Add sound playback here using this.projectileDef?.impactSoundKey
-    if (this.projectileDef?.impactSoundKey) {
-        // Example: this.scene.sound.play(this.projectileDef.impactSoundKey);
-        // console.log(`Playing sound: ${this.projectileDef.impactSoundKey}`); // Placeholder
-    }
-    
-    this.destroy();
+
+    // Handle piercing logic
+    this.currentPierceCount++;
+    if (this.currentPierceCount >= this.maxPierceCount) {
+        this.setActive(false);
+        this.setVisible(false);
+        this.destroy();
+    } 
+    // If pierce count not reached, the projectile continues
+  }
+
+  // ADDED: Helper function to handle effects without destroying
+  private handleImpactEffects(): void {
+     if (this.particleSystem) { 
+        this.particleSystem.playProjectileImpact(this.projectileTypeEnum, this.x, this.y, this.scaleX);
+     }
+     
+     // Use impactSoundKey from the full definition
+     if (this.projectileDef?.impactSoundKey) {
+         // Example: this.scene.sound.play(this.projectileDef.impactSoundKey);
+         // console.log(`Playing sound: ${this.projectileDef.impactSoundKey}`); // Placeholder
+     }
   }
 } 

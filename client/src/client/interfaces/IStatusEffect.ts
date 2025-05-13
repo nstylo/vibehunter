@@ -1,35 +1,62 @@
 import type { EntitySprite } from '../objects/EntitySprite';
 
+export interface IStatusEffectData {
+    id: string;
+    name: string;
+    type: string;
+    duration: number;
+    potency?: number;
+    customData?: Record<string, any>;
+    sourceId?: string;
+}
+
+/**
+ * Defines a status effect definition as loaded from JSON
+ */
+export interface IStatusEffectDefinition {
+    id: string;
+    name: string;
+    description: string;
+    type: string;
+    durationMs?: number;
+    defaultPotency?: number;
+    isPeriodic?: boolean;
+    defaultTickRateMs?: number;
+    visualEffect?: string;
+    soundEffect?: string;
+}
+
+/**
+ * Defines a runtime status effect that can be applied to an entity
+ */
 export interface IStatusEffect {
-    id: string; // Unique ID, e.g., "SLOW_MOVEMENT_TIER_1"
-    name: string; // Display name, e.g., "Slowed"
-    description: string; // "Reduces movement speed by 30%."
-    duration: number; // Milliseconds; -1 for indefinite or until manually removed
-    tickRate?: number; // Optional: how often onTick is called (ms)
-    _lastTickTime?: number; // Internal: tracks the last time onTick was called
-    isPersistent?: boolean; // Does it last across game sessions/levels?
-    canStack: boolean; // Can multiple instances of this exact effect apply?
+    id: string;
+    name: string;
+    description?: string;
+    type: string;
+    duration: number;
+    tickRate?: number;
+    canStack?: boolean;
     maxStacks?: number;
     currentStacks?: number;
-    iconAssetKey?: string; // For UI display
-    sourceId?: string; // ID of the entity or item that applied it
-
-    // --- Core Logic ---
-    onApply(target: EntitySprite): void; // Called when the effect is first applied
-    onUpdate?(target: EntitySprite, delta: number): void; // Called every frame (use sparingly)
-    onTick?(target: EntitySprite): void; // Called if tickRate is defined
-    onRemove(target: EntitySprite): void; // Called when duration ends or effect is dispelled
-
-    // --- Stat Modification ---
-    // Defines how this effect modifies the target's base stats
-    statModifiers?: {
-        // Example: speedMultiplier: 0.7, damageTakenMultiplier: 1.2
-        [statKey: string]: number | { add?: number; multiply?: number; };
+    potency?: number;
+    visualEffect?: string;
+    soundEffect?: string;
+    statModifiers?: { [key: string]: any }; // Can be number or { add?: number, multiply?: number }
+    behavioralFlags?: {
+        isStunned?: boolean;
+        isRooted?: boolean;
+        // Add other behavioral flags as needed (e.g., isSilenced, isDisarmed)
     };
-
-    // --- Behavior Modification (Optional) ---
-    // E.g., forceFlee?: boolean; stun?: boolean;
-    behavioralFlags?: { [flag: string]: boolean };
+    
+    // Lifecycle methods
+    onApply: (target: EntitySprite) => void;
+    onRemove: (target: EntitySprite) => void;
+    onUpdate?: (target: EntitySprite, delta: number) => void;
+    onTick?: (target: EntitySprite) => void;
+    
+    // Optional custom data
+    customData?: Record<string, any>;
 }
 
 // It might be useful to have a simpler data structure for defining status effects in JSON
@@ -39,5 +66,5 @@ export interface IStatusEffectData extends Omit<IStatusEffect, 'onApply' | 'onUp
     // Any additional properties specific to this type of effect, e.g.:
     // For DOT: tickDamage?: number;
     // For Slow: speedMultiplier?: number;
-    customData?: { [key: string]: unknown }; // Changed to unknown
+    customData?: Record<string, any>; // Changed to Record<string, any>
 } 

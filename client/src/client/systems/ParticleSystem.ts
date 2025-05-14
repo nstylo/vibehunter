@@ -454,30 +454,13 @@ export class ParticleSystem {
     public emitFootstep(x: number, y: number): void {
         if (!this.footstepEmitter) return;
 
-        const greyTint = 0x777777;
-        
-        this.footstepEmitter.setConfig({
-            tint: greyTint,
-            speed: { min: 8, max: 16 },
-            angle: { min: 180, max: 360 }, 
-            scale: { start: 0.8, end: 1.3 },
-            alpha: { start: 0.5, end: 0 }, 
-            lifespan: { min: 300, max: 500 },
-            blendMode: Phaser.BlendModes.NORMAL,
-            gravityY: -30,
-            quantity: 1, // Emit fewer particles per individual puff for a more spread out effect
-            frequency: -1,
-            emitting: false,
-            rotate: { min: -45, max: 45 } 
-        });
-        
         const footWidth = 20; 
-        const basePuffs = 3; // Number of puffs to create for a footstep effect
+        const basePuffs = 3; 
         
         for (let i = 0; i < basePuffs; i++) {
             const offsetX = Phaser.Math.Between(-footWidth / 2, footWidth / 2);
             const offsetY = Phaser.Math.Between(-5, 5); 
-            const particleCount = Phaser.Math.Between(1, 2); // 1 or 2 particles per puff
+            const particleCount = Phaser.Math.Between(1, 2); 
             
             this.footstepEmitter.explode(particleCount, x + offsetX, y + offsetY);
         }

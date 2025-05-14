@@ -341,20 +341,6 @@ export class EnemySprite extends EntitySprite {
         this.behaviorStateMachine.update(time, delta, this.targetPlayer);
     }
 
-    public performMeleeAttack(): void {
-        if (this.targetPlayer?.active) {
-            const currentTime = this.scene.time.now;
-            // Use currentStats for cooldown and damage, with fallbacks
-            const attackCooldown = this.currentStats.attackCooldown ?? 1000; // From IBaseEntityStats
-            const meleeDamage = this.currentStats.meleeDamage ?? 5; // From IBaseEntityStats
-
-            if (currentTime > this.lastMeleeAttackTime + attackCooldown) { 
-                this.targetPlayer.takeDamage(meleeDamage, this);
-                this.lastMeleeAttackTime = currentTime; 
-            }
-        }
-    }
-
     // Override the die method from EntitySprite
     protected override die(killer?: EntitySprite | ProjectileSprite | string): void {
         // Clean up shooting timer
@@ -714,8 +700,8 @@ export class EnemySprite extends EntitySprite {
         const projectileType = attack.definition.projectileType || 'BULLET';
         
         // Calculate effective projectile speed
-        // Use the enemy's current projectile speed stat as the base
-        const baseProjectileSpeed = this.currentStats.projectileSpeed || 300; 
+        // Prioritize speed from attack definition, then enemy's current stats, then a default.
+        const baseProjectileSpeed = attack.definition.projectileSpeed || this.currentStats.projectileSpeed || 300;
         const effectiveSpeed = baseProjectileSpeed * (this.currentStats.projectileSpeedModifier ?? 1.0);
         
         // Calculate projectile lifespan based on range

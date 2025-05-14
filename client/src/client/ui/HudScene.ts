@@ -176,33 +176,6 @@ export default class HudScene extends Phaser.Scene {
         }
     }
 
-    private tweenTextColor(textObj: Phaser.GameObjects.Text, startColor: number, endColor: number, duration: number) {
-        // Visual effect - flash text between colors
-        this.tweens.addCounter({
-            from: 0,
-            to: 100,
-            duration: duration,
-            yoyo: true,
-            repeat: 2,
-            onUpdate: (tween) => {
-                const value = tween.getValue();
-                const colorObj = Phaser.Display.Color.Interpolate.ColorWithColor(
-                    Phaser.Display.Color.ValueToColor(startColor),
-                    Phaser.Display.Color.ValueToColor(endColor),
-                    100,
-                    value
-                );
-                const color = Phaser.Display.Color.GetColor(
-                    colorObj.r, colorObj.g, colorObj.b
-                );
-                textObj.setTint(color);
-            },
-            onComplete: () => {
-                textObj.clearTint();
-            }
-        });
-    }
-
     private handleUpdateKillCount(data: { killCount: number }) {
         this.killCountText.setText(`Kills: ${data.killCount}`);
     }

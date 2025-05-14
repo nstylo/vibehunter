@@ -26,6 +26,7 @@ export interface IAttackDefinition {
     projectilesPerShot?: number;
     spreadAngle?: number; // Angle in degrees for spread if projectilesPerShot > 1
     knockbackForce?: number;
+    projectileSpeed?: number; // Speed of the projectile
 
     // Area of Effect
     areaOfEffect?: IAreaOfEffect;

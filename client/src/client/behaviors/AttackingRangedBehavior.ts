@@ -23,7 +23,7 @@ export class AttackingRangedBehavior extends BaseBehavior implements IBehavior {
     }
   }
 
-  update(enemy: EnemySprite, time: number, delta: number, target?: PlayerSprite): BehaviorState | null | undefined {
+  update(enemy: EnemySprite, time: number, delta: number): BehaviorState | null | undefined {
     const currentTarget = enemy.targetPlayer;
 
     if (!currentTarget || !currentTarget.active) {

@@ -1,14 +1,5 @@
 import type { EntitySprite } from '../objects/EntitySprite';
-
-export interface IStatusEffectData {
-    id: string;
-    name: string;
-    type: string;
-    duration: number;
-    potency?: number;
-    customData?: Record<string, any>;
-    sourceId?: string;
-}
+import type ProjectileSprite from '../objects/ProjectileSprite';
 
 /**
  * Defines a status effect definition as loaded from JSON
@@ -34,15 +25,16 @@ export interface IStatusEffect {
     name: string;
     description?: string;
     type: string;
-    duration: number;
-    tickRate?: number;
+    duration: number; // Duration in milliseconds
+    tickRate?: number; // Tick rate in milliseconds for periodic effects
     canStack?: boolean;
     maxStacks?: number;
     currentStacks?: number;
     potency?: number;
+    refreshable?: boolean; // Added refreshable property
     visualEffect?: string;
     soundEffect?: string;
-    statModifiers?: { [key: string]: any }; // Can be number or { add?: number, multiply?: number }
+    statModifiers?: { [key: string]: number | { add?: number; multiply?: number } }; // Updated type
     behavioralFlags?: {
         isStunned?: boolean;
         isRooted?: boolean;
@@ -50,21 +42,19 @@ export interface IStatusEffect {
     };
     
     // Lifecycle methods
-    onApply: (target: EntitySprite) => void;
+    onApply: (target: EntitySprite, source?: EntitySprite | ProjectileSprite | string) => void; // Updated signature
     onRemove: (target: EntitySprite) => void;
     onUpdate?: (target: EntitySprite, delta: number) => void;
     onTick?: (target: EntitySprite) => void;
     
     // Optional custom data
-    customData?: Record<string, any>;
+    customData?: Record<string, unknown>; // Updated type
 }
 
-// It might be useful to have a simpler data structure for defining status effects in JSON
-// which can then be used to instantiate the actual IStatusEffect classes.
 export interface IStatusEffectData extends Omit<IStatusEffect, 'onApply' | 'onUpdate' | 'onTick' | 'onRemove'> {
     type: string; // e.g., "SLOW_EFFECT", "DOT_EFFECT" - used to map to a specific class constructor
     // Any additional properties specific to this type of effect, e.g.:
     // For DOT: tickDamage?: number;
     // For Slow: speedMultiplier?: number;
-    customData?: Record<string, any>; // Changed to Record<string, any>
+    customData?: Record<string, unknown>; // Updated type, ensures consistency with IStatusEffect
 } 

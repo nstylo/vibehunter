@@ -11,8 +11,8 @@ import { FloatingTextManager } from '../ui/FloatingTextManager';
 
 // Extend the interface to include runtime properties
 interface IStatusEffectRuntime extends IStatusEffect {
-    appliedAt?: number;
-    _lastTickTime?: number;
+    appliedAt?: number; // For tracking duration
+    _lastTickTime?: number; // For periodic effects
 }
 
 export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
@@ -45,9 +45,6 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
     public activeStatusEffects = new Map<string, IStatusEffectRuntime>();
 
     protected healthBarGraphics;
-    private healthBarVisible = false;
-    private healthBarHideTimer: Phaser.Time.TimerEvent | null = null;
-    private healthBarHideDelay = 5000; // 5 seconds before hiding the health bar
 
     public projectileType = 'BULLET';
     public projectileLifespan = 1000;
@@ -363,48 +360,52 @@ export abstract class EntitySprite extends Phaser.GameObjects.Sprite {
 
     // Status Effect Management Methods
     public applyStatusEffect(effectIdOrData: string | IStatusEffectData, source?: EntitySprite | ProjectileSprite | string): void {
-        let effectInstance: IStatusEffect | undefined;
-        let effectIdentifier: string;
+        const effectId = typeof effectIdOrData === 'string' ? effectIdOrData : effectIdOrData.id;
+        const existingEffect = this.activeStatusEffects.get(effectId);
 
-        if (typeof effectIdOrData === 'string') {
-            effectIdentifier = effectIdOrData;
-            effectInstance = statusEffectFactory.createEffect(effectIdentifier, source);
-        } else {
-            // If IStatusEffectData is passed, use its id to create the effect via the factory
-            effectIdentifier = effectIdOrData.id;
-            effectInstance = statusEffectFactory.createEffect(effectIdentifier, source);
-            if (!effectInstance) {
-                // This path implies the data was passed, but the factory couldn't make an instance (e.g. type not registered)
-                console.warn(`EntitySprite: Attempted to apply effect with data for ID "${effectIdentifier}", but factory couldn't create it. Ensure type "${effectIdOrData.type}" is registered.`);
-            }
-        }
-
-        if (!effectInstance) {
-            // Ensure effectIdentifier is defined for the warning message
-            const idForWarning = typeof effectIdOrData === 'string' ? effectIdOrData : effectIdOrData.id;
-            console.warn(`EntitySprite: Could not create status effect instance for: ${idForWarning}`);
-            return;
-        }
-
-        const existingEffect = this.activeStatusEffects.get(effectInstance.id); // Use effectInstance.id as it's guaranteed by IStatusEffect
+        let effectInstance: IStatusEffectRuntime;
 
         if (existingEffect) {
-            if (effectInstance.canStack && existingEffect.currentStacks !== undefined && (existingEffect.maxStacks === undefined || existingEffect.currentStacks < existingEffect.maxStacks)) {
-                existingEffect.currentStacks++;
-                existingEffect.duration = effectInstance.duration; // Refresh duration on stack
-            } else if (!effectInstance.canStack) {
-                existingEffect.duration = effectInstance.duration; // Refresh duration for non-stackable
-            } else {
-                // Max stacks reached, just refresh duration
-                existingEffect.duration = effectInstance.duration;
+            // If the effect exists and can be refreshed, refresh its duration and re-apply its immediate effects.
+            // Otherwise, do nothing (or specific logic for non-refreshable effects).
+            if (existingEffect.refreshable) { // This should now be fine
+                existingEffect.appliedAt = this.scene.time.now; // Refresh timestamp
+                if (existingEffect.onApply) {
+                    existingEffect.onApply(this, source); // This call should now be fine
+                }
+                // console.log(`${this.entityId} refreshed status effect: ${effectId}`);
             }
-            this.recalculateStats();
-            existingEffect.onApply(this); // Re-call onApply for refresh/stack logic
+            effectInstance = existingEffect; // Use existing instance for event emission etc.
         } else {
-            this.activeStatusEffects.set(effectInstance.id, effectInstance);
-            effectInstance.currentStacks = 1;
-            effectInstance.onApply(this);
-            this.recalculateStats(); 
+            // Effect does not exist, create a new one
+            // const effectData = typeof effectIdOrData === 'string' ? undefined : effectIdOrData; // This local var is not directly used by the factory if only effectId is passed
+            const newEffect = statusEffectFactory.createEffect(effectId, source); // Corrected call: pass source, not effectData
+            if (newEffect) {
+                effectInstance = newEffect as IStatusEffectRuntime; // Cast to runtime version
+                effectInstance.appliedAt = this.scene.time.now; // Set application time for new effects
+
+                this.activeStatusEffects.set(effectId, effectInstance);
+                if (effectInstance.onApply) {
+                    effectInstance.onApply(this, source); // This call should now be fine
+                }
+                // console.log(`${this.entityId} applied new status effect: ${effectId}`);
+            } else {
+                console.warn(`Failed to create status effect: ${effectId}`);
+                return; // Exit if effect creation failed
+            }
+        }
+
+        if (effectInstance) {
+            // Handle stacking
+            if (effectInstance.canStack) {
+                const currentStacks = effectInstance.currentStacks || 0;
+                const maxStacks = effectInstance.maxStacks;
+                if (maxStacks === undefined || currentStacks < maxStacks) {
+                    effectInstance.currentStacks = currentStacks + 1;
+                }
+            }
+            
+            this.recalculateStats(); // Stats might change due to stacking or re-application
         }
     }
 
